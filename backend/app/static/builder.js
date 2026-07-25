@@ -37,6 +37,18 @@ function bval(q) {
   return DIRTY[q.text] ?? DRAFTS[q.text] ?? q.answer ?? "";
 }
 
+/* Everything on screen that the server does not have yet, drafts included.
+ *
+ * A draft is unsaved work like anything else you typed, so Save writes it and the
+ * gate shows it as unsaved. Keeping drafts out of this was worse than useless: the
+ * dots filled in as though the answers were stored and the Save button stayed
+ * disabled, so twelve drafted answers had no way to be accepted at all.
+ *
+ * DRAFTS stays a separate map only so an untouched draft can be styled as one. */
+function bunsaved() {
+  return { ...DRAFTS, ...DIRTY };
+}
+
 const bpct = (a, b) => (b ? Math.round(a / b * 100) : 0);
 
 window.Builder = {
@@ -57,7 +69,7 @@ window.Builder = {
 function bdDraw() {
   const p = IV.progress;
   const ch = IV.character;
-  const unsaved = Object.keys(DIRTY).length;
+  const unsaved = Object.keys(bunsaved()).length;
   $("#castWho").textContent = ch.name;
   $("#castDetail").innerHTML = `
     <div class="panel lit pad bd-head">
@@ -124,16 +136,22 @@ function bdDraw() {
  * far you are and this tells you which ones are missing and lets you go there. */
 function bdGate() {
   const core = bqueue().filter((q) => q.is_core);
+  const pending = bunsaved();
+  const waiting = core.filter((q) => (pending[q.text] || "").trim()).length;
   return `<div class="bd-gate">
     ${core.map((q) => {
       const has = Boolean(bval(q).trim());
-      return `<button class="bd-dot ${has ? "on" : ""} ${DIRTY[q.text] ? "new" : ""}"
+      return `<button class="bd-dot ${has ? "on" : ""}
+        ${(pending[q.text] || "").trim() ? "new" : ""}"
         data-q="${q.id}" title="${esc(q.text)}"></button>`;
     }).join("")}
     <span class="tiny faint" style="margin-left:8px">
-      ${IV.progress.ready_for_dialogue
-        ? "all 12 core answered, this character can speak"
-        : "the 12 core answers are what compile a voice. Click a dot to answer it."}
+      ${waiting
+        ? `${waiting} core ${waiting === 1 ? "answer is" : "answers are"} written `
+          + `here and not saved yet. Amber means the server does not have it.`
+        : IV.progress.ready_for_dialogue
+          ? "all 12 core answered, this character can speak"
+          : "the 12 core answers are what compile a voice. Click a dot to answer it."}
     </span>
   </div>`;
 }
@@ -141,12 +159,15 @@ function bdGate() {
 function bdInterview() {
   const q = bqueue()[BI];
   if (!q) return `<div class="empty">All 100 answered.</div>`;
+  // "filled in", not "answered": this counts what is on screen, and the chip above
+  // counts what the server has. Calling both of them answered read as a bug when a
+  // fresh character showed 12 filled in and 0 of 100 in the same glance.
   const n = bqueue().filter((x) => bval(x).trim()).length;
   return `
     <div class="panel lit pad bd-one">
       <div class="bd-qmeta">
         <span class="chip ${q.is_core ? "warn" : ""}">${q.is_core ? "core" : esc(q.part_label)}</span>
-        <span class="tiny faint mono">question ${q.id} of 100 · ${n} answered</span>
+        <span class="tiny faint mono">question ${q.id} of 100 · ${n} filled in</span>
         <span class="tiny faint" style="margin-left:auto">
           ${DRAFTS[q.text] ? "drafted, not saved" : q.answer ? "answered" : ""}</span>
       </div>
@@ -191,9 +212,9 @@ function bdWire() {
       const v = t.value;
       if (v === (q.answer || "")) delete DIRTY[q.text];
       else DIRTY[q.text] = v;
-      delete DRAFTS[q.text];
+      delete DRAFTS[q.text];        // touched, so it is yours now, not a draft
       t.classList.remove("draft");
-      const n = Object.keys(DIRTY).length;
+      const n = Object.keys(bunsaved()).length;
       const chip = $("#bdUnsaved");
       chip.textContent = `${n} unsaved`;
       chip.style.display = n ? "" : "none";
@@ -233,7 +254,7 @@ function bdWire() {
 }
 
 async function bdStep(d, saveFirst) {
-  if (saveFirst && Object.keys(DIRTY).length) { await bdSave(); return; }
+  if (saveFirst && Object.keys(bunsaved()).length) { await bdSave(); return; }
   BI = Math.min(bqueue().length - 1, Math.max(0, BI + d));
   bdDraw();
   $("#castDetail .ans")?.focus();
@@ -243,12 +264,13 @@ async function bdStep(d, saveFirst) {
  * stales both cards once, which is the whole reason answers are batched. */
 async function bdSave() {
   const answers = {};
-  for (const [k, v] of Object.entries(DIRTY)) if (v.trim()) answers[k] = v.trim();
-  if (!Object.keys(answers).length) { DIRTY = {}; bdDraw(); return; }
+  for (const [k, v] of Object.entries(bunsaved())) if (v.trim()) answers[k] = v.trim();
+  if (!Object.keys(answers).length) { DIRTY = {}; DRAFTS = {}; bdDraw(); return; }
   $("#bdSaveAll").disabled = true;
   await api(`/characters/${BCID}/answers`,
     { method: "PUT", body: JSON.stringify({ answers }) });
   DIRTY = {};
+  DRAFTS = {};
   trace("answers", `${Object.keys(answers).length} saved · canon bumped`, "done");
   await load();                        // the cards and the bible both move
   IV = await api(`/characters/${BCID}/interview`);
