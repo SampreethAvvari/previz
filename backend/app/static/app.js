@@ -412,76 +412,21 @@ function drawCastList() {
       <div class="tiny faint">${c.core_answered}/12 core · ${c.answer_count} answers</div>
     </button>`).join("");
   $$("#castList .pick").forEach((b) => b.onclick = () => pick(b.dataset.id));
-  if (PICKED) pick(PICKED);
 }
+// Deliberately does NOT re-pick. pick() calls this to move the highlight, so a
+// re-pick here recursed until the stack blew on the first character you clicked.
 
+/* The list is this file's. Everything to the right of it belongs to builder.js,
+ * which owns the 100 question interview. Kept apart so a change to how the
+ * interview asks is never a diff against the shell around it. */
 async function pick(id) {
   PICKED = id;
   drawCastList();
   const ch = await api(`/characters/${id}`);
   $("#castWho").textContent = ch.name;
-  const p = ch.progress;
-  $("#castDetail").innerHTML = `
-    <div class="panel pad" style="margin-bottom:12px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:11px">
-        <button class="act primary" id="btnCompile">Compile cards</button>
-        <button class="act" id="btnCast">Cast · sheet and fingerprint</button>
-        <span class="chip">${p.answered}/100</span>
-        <span class="chip ${p.ready_for_dialogue ? "ok" : "warn"}">
-          ${p.core_done}/12 core</span>
-      </div>
-      <div class="grid" style="grid-template-columns:repeat(7,1fr);gap:6px">
-        ${Object.entries(p.by_part).map(([, v]) => `
-          <div>
-            <div class="meter"><i style="width:${v.done / v.total * 100}%"></i></div>
-            <div class="tiny faint" style="margin-top:5px;font-size:10px">
-              ${esc(v.label)}<br>${v.done}/${v.total}</div>
-          </div>`).join("")}
-      </div>
-    </div>
-    ${ch.identity_card ? cardPanel("Identity Card · frozen, pasted verbatim into every image prompt", [
-      ["descriptor", ch.identity_card.descriptor],
-      ["wardrobe", ch.identity_card.wardrobe],
-      ["never", ch.identity_card.negative]], ch.sheet_url) : ""}
-    ${ch.voice_card ? cardPanel("Voice Card · frozen, injected verbatim into her sub-agent", [
-      ["how she speaks", ch.voice_card.card],
-      ["says", (ch.voice_card.phrases || []).join(" · ")],
-      ["never says", (ch.voice_card.never_says || []).join(" · ")],
-      ["samples", (ch.voice_card.samples || []).map((s) => `"${s}"`).join("\n")],
-      ...Object.entries(ch.voice_card.register || {})]) : ""}
-    <div class="panel pad">
-      <div class="eyebrow">Next questions</div>
-      ${ch.next_questions.map((q) => `
-        <div style="margin-bottom:9px">
-          <label class="lab">${q.is_core ? "core · " : ""}${esc(q.part_label)}</label>
-          <div class="tiny" style="margin-bottom:5px">${esc(q.text)}</div>
-          <input class="f ans" data-q="${esc(q.text)}" placeholder="answer in her words">
-        </div>`).join("")}
-      <button class="act" id="btnSave">Save answers</button>
-      <div class="tiny faint" style="margin-top:7px">
-        Saving bumps canon version and stales both cards, so the next call
-        recompiles. That is the point: a corrected fact that did not force a
-        recompile would keep producing the old face and the old voice.
-      </div>
-    </div>`;
-
-  $("#btnSave").onclick = async () => {
-    const answers = {};
-    $$("#castDetail .ans").forEach((i) => { if (i.value.trim()) answers[i.dataset.q] = i.value.trim(); });
-    if (!Object.keys(answers).length) return;
-    await api(`/characters/${id}/answers`, { method: "PUT", body: JSON.stringify({ answers }) });
-    await load(); pick(id);
-  };
-  $("#btnCompile").onclick = async () => {
-    $("#btnCompile").disabled = true;
-    $$("#itabs button")[1].click();
-    await sse(`/characters/${id}/compile`, {}, { run_end: async () => { await load(); pick(id); } });
-  };
-  $("#btnCast").onclick = async () => {
-    $("#btnCast").disabled = true;
-    $$("#itabs button")[1].click();
-    await sse(`/characters/${id}/cast`, {}, { run_end: async () => { await load(); pick(id); } });
-  };
+  if (window.Builder) return Builder.open(ch);
+  $("#castDetail").innerHTML =
+    `<div class="empty">The character builder did not load. Reload the page.</div>`;
 }
 
 function cardPanel(title, rows, sheet) {

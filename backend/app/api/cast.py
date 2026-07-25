@@ -96,6 +96,108 @@ def put_answers(cid: str, body: AnswersIn, story_id: str | None = None):
     return d
 
 
+@router.get("/characters/{cid}/interview")
+def interview(cid: str, story_id: str | None = None):
+    """The whole interview in one call: 7 parts, 100 questions, answers merged in.
+
+    One call rather than one per part because the builder lets you jump anywhere
+    in the 100 at any time, and a fetch per jump would make the cheapest
+    interaction in the tab the slowest one. The payload is about 30 KB.
+    """
+    st = store.story(_sid(story_id))
+    c = st.characters.get(cid)
+    if not c:
+        raise HTTPException(404, "no such character")
+    parts = [{**p, "questions": [{**q, "answer": c.answers.get(q["text"], "")}
+                                 for q in p["questions"]]}
+             for p in Q.parts()]
+    nxt = Q.next_unanswered(c.answers, limit=1)
+    return {"character": character_json(c),
+            "progress": Q.progress(c.answers),
+            "parts": parts,
+            "next": nxt[0] if nxt else None,
+            "core_texts": Q.CORE_TEXTS}
+
+
+class DraftIn(BaseModel):
+    premise: str = ""
+    part: str | None = None      # None means the 12 core questions
+    limit: int = 12
+
+
+@router.post("/characters/{cid}/draft")
+def draft_answers(cid: str, body: DraftIn, story_id: str | None = None):
+    """Draft answers for the unanswered questions, in the character's own voice.
+
+    Nothing is written. The drafts come back for the writer to edit and save,
+    because an answer the model invented and stored silently would become canon
+    that nobody decided, and every face and every line after it would be built on
+    a fact the writer never agreed to. Proposals, not edits (§5.1).
+
+    The premise is the one thing the model cannot infer: a sentence about who this
+    person is. Without it the drafts are a generic person, which is worse than an
+    empty field because it looks finished.
+    """
+    sid = _sid(story_id)
+    st = store.story(sid)
+    c = st.characters.get(cid)
+    if not c:
+        raise HTTPException(404, "no such character")
+
+    pool = (Q.core_questions() if not body.part
+            else [q for q in Q.all_questions() if q["part"] == body.part])
+    todo = [q for q in pool if not c.answers.get(q["text"])][:max(1, body.limit)]
+    if not todo:
+        raise HTTPException(400, "nothing unanswered there")
+
+    def work(emit):
+        from google.genai import types
+
+        from app.consistency import _SAFETY, _client
+        from app.gemini_client import TEXT_MODEL
+
+        emit.thinking(f"drafting {len(todo)} answers for {c.name} to review",
+                      agent="CastingDirector")
+        known = "\n".join(f"Q: {t}\nA: {a}" for t, a in list(c.answers.items())[:20])
+        resp = _client().models.generate_content(
+            model=TEXT_MODEL,
+            contents=(
+                f"You are {c.name}, a {c.role} character in this story: "
+                f"{st.title}. {st.logline}\n"
+                + (f"Who you are: {body.premise}\n" if body.premise else "")
+                + (f"\nWhat you have already said about yourself:\n{known}\n"
+                   if known else "")
+                + "\nAnswer each question below in first person, in your own "
+                  "words, one to three sentences. Be specific and concrete: a "
+                  "name, a place, a habit, a number. Never hedge, never say "
+                  "'perhaps' or 'as an AI'. Contradict nothing you already "
+                  "said.\n\n"
+                + "\n".join(f"{i + 1}. {q['text']}" for i, q in enumerate(todo))
+                + "\n\nReturn JSON {\"answers\": [\"...\"]} with exactly "
+                  f"{len(todo)} strings, in the same order."),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema={
+                    "type": "object",
+                    "properties": {"answers": {"type": "array",
+                                               "items": {"type": "string"}}},
+                    "required": ["answers"]},
+                max_output_tokens=4096, safety_settings=_SAFETY),
+        )
+        import json as _json
+        got = _json.loads(resp.text).get("answers", [])
+        drafts = {q["text"]: (got[i] or "").strip()
+                  for i, q in enumerate(todo) if i < len(got) and got[i]}
+        for q in todo[:3]:
+            if drafts.get(q["text"]):
+                emit.partial(q["text"][:40], drafts[q["text"]])
+        emit.thinking(f"{len(drafts)} drafts ready. Nothing is saved until you "
+                      f"accept them.", agent="CastingDirector")
+        return {"drafts": drafts}
+
+    return stream(work, agent="CastingDirector")
+
+
 @router.get("/characters/{cid}/progress")
 def progress(cid: str, story_id: str | None = None):
     st = store.story(_sid(story_id))

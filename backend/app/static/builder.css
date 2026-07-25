@@ -1,0 +1,157 @@
+/* Magic Hour · the character builder.
+ *
+ * Only what the builder needs. Everything else comes from app.css, so the tab
+ * cannot drift from the rest of the product and a change to the design system
+ * lands here for free.
+ *
+ * One idea drives the layout: the 12 core answers are the gate, so they are the
+ * one thing on screen with colour on it. The other 88 are grey until answered.
+ */
+
+.bd-head { margin-bottom: 12px; }
+
+.bd-row {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.bd-row .f { flex: 1; min-width: 260px; }
+
+/* the gate ---------------------------------------------------------------- */
+
+.bd-gate {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 13px 0 3px;
+}
+
+.bd-dot {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--line-bright);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
+              transform var(--t) var(--ease);
+}
+.bd-dot:hover { transform: translateY(-1px); border-color: var(--ink-dim); }
+.bd-dot.on {
+  background: color-mix(in srgb, var(--cast) 62%, transparent);
+  border-color: color-mix(in srgb, var(--cast) 70%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cast) 34%, transparent);
+}
+/* Answered in this session and not written yet. Different from answered, because
+ * a filled dot that vanishes on reload would be a lie about what is stored. */
+.bd-dot.new {
+  background: color-mix(in srgb, var(--warn) 46%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 60%, transparent);
+  box-shadow: none;
+}
+
+/* the seven parts --------------------------------------------------------- */
+
+.bd-parts {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 7px;
+  margin-top: 14px;
+}
+.bd-part {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 7px 8px 8px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+.bd-part:hover { background: rgba(255, 255, 255, 0.04); }
+.bd-part.on {
+  border-color: color-mix(in srgb, var(--cast) 42%, transparent);
+  background: color-mix(in srgb, var(--cast) 9%, transparent);
+}
+.bd-part .meter { margin-bottom: 7px; }
+.bd-part .tiny { font-size: 10.5px; line-height: 1.35; }
+
+/* draft ------------------------------------------------------------------- */
+
+.bd-draft { margin-bottom: 12px; }
+
+/* interview or all 100 ---------------------------------------------------- */
+
+.bd-modes {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+}
+.bd-modes button {
+  padding: 6px 15px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-faint);
+  font: 500 12px var(--ui);
+  cursor: pointer;
+  transition: color var(--t) var(--ease), background var(--t) var(--ease);
+}
+.bd-modes button:hover { color: var(--ink-dim); }
+.bd-modes button.on { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+
+.bd-one { margin-bottom: 12px; }
+
+.bd-qmeta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+/* The question, set large. This is the only thing on screen when interviewing, so
+ * it gets to be the size of the thing you are thinking about. */
+.bd-q {
+  font: 300 21px/1.35 var(--ui);
+  letter-spacing: -0.011em;
+  margin-bottom: 13px;
+  max-width: 62ch;
+}
+
+textarea.f {
+  resize: vertical;
+  font: 400 13.5px/1.6 var(--ui);
+  min-height: 42px;
+}
+/* A model draft, visibly not yours until you touch it. */
+textarea.f.draft {
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  background: color-mix(in srgb, var(--warn) 5%, transparent);
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.bd-item {
+  display: flex;
+  gap: 11px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+.bd-item:first-of-type { border-top: 0; padding-top: 2px; }
+.bd-ilab {
+  width: 46px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+  padding-top: 1px;
+}
+.bd-item.done .bd-ilab .mono { color: var(--cast); }
+.bd-item .chip { padding: 1px 6px; font-size: 9.5px; }

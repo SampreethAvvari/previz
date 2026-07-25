@@ -6,6 +6,7 @@
 <title>Magic Hour</title>
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/bible.css">
+<link rel="stylesheet" href="/static/builder.css">
 </head>
 <body>
 
@@ -238,7 +239,9 @@
       <div class="grid frames" id="board"></div>
     </section>
 
-    <!-- Cast -------------------------------------------------------------- -->
+    <!-- Cast · the character builder --------------------------------------
+         The 100 questions live here. Everything below #castDetail is drawn by
+         builder.js, which owns the interview and nothing else. -->
     <section class="surface" data-s="cast">
       <div class="grid" style="grid-template-columns:290px 1fr">
         <div>
@@ -248,6 +251,10 @@
             <label class="lab">Add a character</label>
             <input class="f" id="newName" placeholder="name">
             <button class="act" id="btnAddChar" style="margin-top:8px;width:100%">Create</button>
+            <div class="tiny faint" style="margin-top:9px">
+              A new character starts with 100 unanswered questions. Answer the 12
+              core ones and they can speak.
+            </div>
           </div>
         </div>
         <div>
@@ -321,5 +328,6 @@
 
 <script src="/static/app.js"></script>
 <script src="/static/bible.js"></script>
+<script src="/static/builder.js"></script>
 </body>
 </html>
