@@ -19,17 +19,35 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "· project $PROJECT · region $REGION · service $SERVICE"
 gcloud config set project "$PROJECT" >/dev/null
 
-# sql-component alone is not enough for Cloud SQL, but we are not using it today.
-# These three are what --source needs: Cloud Build to build, Artifact Registry to
-# store, Cloud Run to serve.
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com >/dev/null
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com >/dev/null
+
+# Built locally and pushed, NOT via `gcloud run deploy --source`.
+#
+# --source hands the build to Cloud Build, whose default service account is missing
+# roles/cloudbuild.builds.builder on this project, and granting it needs
+# resourcemanager.projects.setIamPolicy which this account does not have. The
+# failure is also misleading: it reports a permission denied on the source bucket
+# rather than on the build. Building here and pushing uses only permissions we
+# already hold, so it needs no policy change at all.
+IMAGE="$REGION-docker.pkg.dev/$PROJECT/cloud-run-source-deploy/$SERVICE"
+TAG="$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo manual)"
+
+# Tag by commit so a revision can be traced back to a SHA, and :latest so there is
+# always something obvious to roll forward to.
+echo "· building $IMAGE:$TAG"
+gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet >/dev/null 2>&1
 
 # Context is the repo root, not backend/, because the app reads
 # data/seed/character_questions.json. Building from backend/ produces an image that
 # boots, serves the UI, and 404s every /api route.
+docker build -q -f "$ROOT/backend/Dockerfile" \
+  -t "$IMAGE:$TAG" -t "$IMAGE:latest" "$ROOT" >/dev/null
+docker push -q "$IMAGE:$TAG" >/dev/null
+docker push -q "$IMAGE:latest" >/dev/null
+echo "· pushed $TAG"
+
 gcloud run deploy "$SERVICE" \
-  --source "$ROOT" \
+  --image "$IMAGE:$TAG" \
   --region "$REGION" \
   --allow-unauthenticated \
   --min-instances 1 \
@@ -37,7 +55,7 @@ gcloud run deploy "$SERVICE" \
   --cpu 2 \
   --timeout 600 \
   --port 8080 \
-  --set-env-vars "GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION${GOOGLE_MAPS_API_KEY:+,GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY}"
+  --set-env-vars "GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION${GOOGLE_MAPS_API_KEY:+,GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY}${GOOGLE_OAUTH_CLIENT_ID:+,GOOGLE_OAUTH_CLIENT_ID=$GOOGLE_OAUTH_CLIENT_ID}"
 
 URL="$(gcloud run services describe "$SERVICE" --region "$REGION" \
         --format='value(status.url)')"
