@@ -2,6 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **DEFERRED, NOT CANCELLED.** This plan is correct for a 48 hour build. The
+> hackathon turned out to be a 4 hour competition ending 15:30 on 2026-07-25, so
+> for today read [`docs/NOW.md`](../../NOW.md) instead. Cloud SQL, Terraform,
+> CI/CD, Workload Identity, the Next.js rewrite, the ADK migration and the
+> `backend/` to `apps/agents/` move are all off the table until after judging.
+> Everything here still applies to the real build afterwards.
+
 **Goal:** Build the shared platform every Magic Hour surface depends on: monorepo structure, verified Vertex clients, Postgres with pgvector, the transactional knowledge index, hybrid retrieval, the Continuity Pack, the trace writer, auth, the design system shell, and CI/CD.
 
 **Architecture:** Two Cloud Run services in one monorepo. `apps/web` is Next.js 15 and acts as a BFF: it owns the session and holds no model or database credentials. `apps/agents` is FastAPI plus Google ADK with `--ingress=internal`, invocable only by the web service's identity. State lives in Cloud SQL Postgres 16 with pgvector, where a structured row and its retrieval chunks commit in one transaction. Telemetry streams to BigQuery.
