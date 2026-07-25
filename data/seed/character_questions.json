@@ -1,0 +1,850 @@
+{
+  "count": 100,
+  "core_ids": [
+    1,
+    11,
+    12,
+    14,
+    29,
+    32,
+    41,
+    49,
+    53,
+    85,
+    86,
+    98
+  ],
+  "note": "The 12 core questions gate a character as usable for dialogue. They are what the Voice Card in backend/app/voice.py compiles from, so answer these first. The other 88 deepen the character but are not required to start writing. Core questions were chosen for what determines how a person TALKS, not what makes them interesting.",
+  "parts": [
+    {
+      "key": "basics",
+      "label": "The Basics"
+    },
+    {
+      "key": "growing_up",
+      "label": "Growing Up"
+    },
+    {
+      "key": "past_influences",
+      "label": "Past Influences"
+    },
+    {
+      "key": "beliefs_opinions",
+      "label": "Beliefs and Opinions"
+    },
+    {
+      "key": "relationships",
+      "label": "Relationships With Others"
+    },
+    {
+      "key": "likes_dislikes",
+      "label": "Likes and Dislikes"
+    },
+    {
+      "key": "self_image",
+      "label": "Self Image"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "What is your full name?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 2,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Where and when were you born?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 3,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Who are/were your parents? (Know their names, occupations, personalities, etc.)",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 4,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Do you have any siblings? What are/were they like?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 5,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Where do you live now, and with whom? Describe the place and the person/people.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 6,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "What is your occupation?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 7,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Write a full physical description of yourself. You might want to consider factors such as: height, weight, race, hair and eye color, style of dress, and any tattoos, scars, or distinguishing marks.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 8,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "To which social class do you belong?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 9,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Do you have any allergies, diseases, or other physical weaknesses?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 10,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Are you right- or left-handed?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 11,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "What does your voice sound like?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 12,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "What words and/or phrases do you use very frequently?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 13,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "What do you have in your pockets?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 14,
+      "part": "basics",
+      "part_label": "The Basics",
+      "text": "Do you have any quirks, strange mannerisms, annoying habits, or other defining characteristics?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 15,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "How would you describe your childhood in general?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 16,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "What is your earliest memory?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 17,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "How much schooling have you had?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 18,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "Did you enjoy school?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 19,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "Where did you learn most of your skills and other abilities?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 20,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "While growing up, did you have any role models? If so, describe them.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 21,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "While growing up, how did you get along with the other members of your family?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 22,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "As a child, what did you want to be when you grew up?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 23,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "As a child, what were your favorite activities?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 24,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "As a child, what kinds of personality traits did you display?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 25,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "As a child, were you popular? Who were your friends, and what were they like?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 26,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "When and with whom was your first kiss?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 27,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "Are you a virgin? If not, when and with whom did you lose your virginity?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 28,
+      "part": "growing_up",
+      "part_label": "Growing Up",
+      "text": "If you are a supernatural being (i.e. mage, werewolf, vampire), tell the story of how you became what you are or first learned of your own abilities. If you are just a normal human, describe any influences in your past that led you to do the things you do today.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 29,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "What do you consider the most important event of your life so far?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 30,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "Who has had the most influence on you?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 31,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "What do you consider your greatest achievement?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 32,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "What is your greatest regret?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 33,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "What is the most evil thing you have ever done?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 34,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "Do you have a criminal record of any kind?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 35,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "When was the time you were the most frightened?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 36,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "What is the most embarrassing thing ever to happen to you?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 37,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "If you could change one thing from your past, what would it be, and why?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 38,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "What is your best memory?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 39,
+      "part": "past_influences",
+      "part_label": "Past Influences",
+      "text": "What is your worst memory?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 40,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "Are you basically optimistic or pessimistic?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 41,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "What is your greatest fear?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 42,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "What are your religious views?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 43,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "What are your political views?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 44,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "What are your views on sex?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 45,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "Are you able to kill? Under what circumstances do you find killing to be acceptable or unacceptable?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 46,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "In your opinion, what is the most evil thing any human being could do?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 47,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "Do you believe in the existence of soul mates and/or true love?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 48,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "What do you believe makes a successful life?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 49,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "How honest are you about your thoughts and feelings (i.e. do you hide your true self from others, and in what way)?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 50,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "Do you have any biases or prejudices?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 51,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "Is there anything you absolutely refuse to do under any circumstances? Why do you refuse to do it?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 52,
+      "part": "beliefs_opinions",
+      "part_label": "Beliefs and Opinions",
+      "text": "Who or what, if anything, would you die for (or otherwise go to extremes for)?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 53,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "In general, how do you treat others (politely, rudely, by keeping them at a distance, etc.)? Does your treatment of them change depending on how well you know them, and if so, how?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 54,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Who is the most important person in your life, and why?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 55,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Who is the person you respect the most, and why?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 56,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Who are your friends? Do you have a best friend? Describe these people.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 57,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Do you have a spouse or significant other? If so, describe this person.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 58,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Have you ever been in love? If so, describe what happened.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 59,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "What do you look for in a potential lover?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 60,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "How close are you to your family?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 61,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Have you started your own family? If so, describe them. If not, do you want to? Why or why not?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 62,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Who would you turn to if you were in desperate need of help?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 63,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Do you trust anyone to protect you? Who, and why?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 64,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "If you died or went missing, who would miss you?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 65,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Who is the person you despise the most, and why?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 66,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Do you tend to argue with people, or avoid conflict?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 67,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Do you tend to take on leadership roles in social situations?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 68,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Do you like interacting with large groups of people? Why or why not?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 69,
+      "part": "relationships",
+      "part_label": "Relationships With Others",
+      "text": "Do you care what others think of you?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 70,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What is/are your favorite hobbies and pastimes?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 71,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What is your most treasured possession?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 72,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What is your favorite color?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 73,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What is your favorite food?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 74,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What, if anything, do you like to read?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 75,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What is your idea of good entertainment (consider music, movies, art, etc.)?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 76,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "Do you smoke, drink, or use drugs? If so, why? Do you want to quit?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 77,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "How do you spend a typical Saturday night?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 78,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What makes you laugh?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 79,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What, if anything, shocks or offends you?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 80,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What would you do if you had insomnia and had to find something to do to amuse yourself?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 81,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "How do you deal with stress?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 82,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "Are you spontaneous, or do you always need to have a plan?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 83,
+      "part": "likes_dislikes",
+      "part_label": "Likes and Dislikes",
+      "text": "What are your pet peeves?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 84,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "Describe the routine of a normal day for you. How do you feel when this routine is disrupted?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 85,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "What is your greatest strength as a person?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 86,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "What is your greatest weakness?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 87,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "If you could change one thing about yourself, what would it be?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 88,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "Are you generally introverted or extroverted?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 89,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "Are you generally organized or messy?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 90,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "Name three things you consider yourself to be very good at, and three things you consider yourself to be very bad at.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 91,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "Do you like yourself?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 92,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "What are your reasons for being an adventurer (or doing the strange and heroic things that RPG characters do)? Are your real reasons for doing this different than the ones you tell people in public? (If so, detail both sets of reasons\u2026)",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 93,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "What goal do you most want to accomplish in your lifetime?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 94,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "Where do you see yourself in 5 years?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 95,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "If you could choose, how would you want to die?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 96,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "If you knew you were going to die in 24 hours, name three things you would do in the time you had left.",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 97,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "What is the one thing for which you would most like to be remembered after your death?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 98,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "What three words best describe your personality?",
+      "is_core": true,
+      "weight": 3
+    },
+    {
+      "id": 99,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "What three words would others probably use to describe you?",
+      "is_core": false,
+      "weight": 1
+    },
+    {
+      "id": 100,
+      "part": "self_image",
+      "part_label": "Self Image",
+      "text": "If you could, what advice would you, the player, give to your character? (You might even want to speak as if he or she were sitting right here in front of you, and use proper tone so he or she might heed your advice\u2026)",
+      "is_core": false,
+      "weight": 1
+    }
+  ]
+}

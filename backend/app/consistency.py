@@ -29,7 +29,9 @@ import base64
 import io
 import json
 import re
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass
+from functools import lru_cache
 
 import requests
 from google import genai
@@ -70,7 +72,12 @@ STYLE_PRESETS = {
 }
 
 
+@lru_cache(maxsize=1)
 def _client() -> genai.Client:
+    """Cached. Constructing a client per call gets it garbage collected mid
+    flight, and the next request dies with "Cannot send a request, as the client
+    has been closed."
+    """
     return genai.Client(vertexai=True, project=PROJECT, location=LOCATION)
 
 
@@ -130,21 +137,45 @@ def compile_identity_card(name: str, facts: dict[str, str],
 
 # ------------------------------------------------------------ image generation
 
-def _generate(prompt: str, refs: list[bytes] | None = None) -> bytes:
+def _generate(prompt: str, refs: list[bytes] | None = None,
+              attempts: int = 4) -> bytes:
+    """One image, with backoff on 429.
+
+    The lab project is shared with every other team in the room, so
+    RESOURCE_EXHAUSTED is normal rather than exceptional. Backing off and
+    retrying costs seconds; not doing it costs the demo.
+
+    If you are seeing 429 on every call, check that ADC has a quota project:
+        gcloud auth application-default set-quota-project <PROJECT_ID>
+    Without it you are billed against a starvation-tier quota bucket and
+    everything fails regardless of the project's real limits.
+    """
     parts: list[types.Part] = [
         types.Part.from_bytes(data=r, mime_type="image/png") for r in (refs or [])
     ]
     parts.append(types.Part.from_text(text=prompt))
-    resp = _client().models.generate_content(
-        model=IMAGE_MODEL,
-        contents=[types.Content(role="user", parts=parts)],
-        config=types.GenerateContentConfig(safety_settings=_SAFETY),
-    )
-    for p in resp.candidates[0].content.parts:
-        inline = getattr(p, "inline_data", None)
-        if inline and inline.data:
-            return inline.data
-    raise RuntimeError(f"no image returned ({resp.candidates[0].finish_reason})")
+
+    last: Exception | None = None
+    for i in range(attempts):
+        try:
+            resp = _client().models.generate_content(
+                model=IMAGE_MODEL,
+                contents=[types.Content(role="user", parts=parts)],
+                config=types.GenerateContentConfig(safety_settings=_SAFETY),
+            )
+            for p in resp.candidates[0].content.parts:
+                inline = getattr(p, "inline_data", None)
+                if inline and inline.data:
+                    return inline.data
+            raise RuntimeError(
+                f"no image returned ({resp.candidates[0].finish_reason})")
+        except Exception as exc:  # noqa: BLE001 - retry on anything transient
+            last = exc
+            if "RESOURCE_EXHAUSTED" not in str(exc) and "429" not in str(exc):
+                raise
+            if i < attempts - 1:
+                time.sleep(2 ** i * 2)   # 2s, 4s, 8s
+    raise RuntimeError(f"image generation exhausted after {attempts} attempts: {last}")
 
 
 def generate_reference_sheet(card: IdentityCard) -> bytes:
@@ -211,7 +242,7 @@ def detect_face(png: bytes) -> tuple[int, int, int, int] | None:
                     "Return the bounding box of the largest human face in this "
                     "image as JSON [y0, x0, y1, x1], normalised 0 to 1000. "
                     "Include the whole head: hair, jaw, ears. If there is no "
-                    "face, return []."))]),
+                    "face, return []."))])],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json", safety_settings=_SAFETY),
         )
@@ -243,6 +274,29 @@ def crop_face(png: bytes, pad: float = 0.18) -> bytes | None:
     return buf.getvalue()
 
 
+_CREDS = None
+
+
+def _access_token() -> str:
+    """ADC token, refreshed as needed.
+
+    Deliberately not `gcloud auth print-access-token`: gcloud does not exist in
+    the Cloud Run container, so shelling out works locally and then fails the
+    moment we deploy. google.auth.default() picks up ADC locally and the attached
+    service account in production, with no branch.
+    """
+    global _CREDS
+    import google.auth
+    import google.auth.transport.requests
+
+    if _CREDS is None:
+        _CREDS, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    if not _CREDS.valid:
+        _CREDS.refresh(google.auth.transport.requests.Request())
+    return _CREDS.token
+
+
 def embed_image(png: bytes) -> list[float]:
     """multimodalembedding@001 via REST.
 
@@ -250,10 +304,7 @@ def embed_image(png: bytes) -> list[float]:
     model and fails with "Empty instances", because it is a predict-style model
     rather than a content-style one.
     """
-    import subprocess
-    token = subprocess.run(  # noqa: S603 - fixed argv, no user input
-        ["gcloud", "auth", "print-access-token"],
-        capture_output=True, text=True, check=True, shell=False).stdout.strip()
+    token = _access_token()
     r = requests.post(
         f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT}"
         f"/locations/{LOCATION}/publishers/google/models/{EMBED_MODEL}:predict",

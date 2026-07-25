@@ -62,12 +62,32 @@ string verbatim.
 
 ## Who does what
 
-| Who | Owns | Done when |
-|---|---|---|
-| **Sampreeth** | `consistency.py`: Identity Cards, reference sheets, conditioned shots, the face-crop referee. Voice Cards and the per-character dialogue agents. | A character generated in shot 1 is visibly the same person in shot 6, with a score shown per shot |
-| **Sahaj** | Frontend. Restyle `app/static/index.html`: near black, character cards with their reference sheet, shot grid with a score badge per frame. Do **not** edit `tools/storyboard.py`, Sampreeth is wiring `consistency.py` into it. | It looks like a product, not a form |
-| **kik728** | `data/seed/story.json`: Sampreeth's story, 3 characters, answers to the 12 core questions each, 6 to 8 scenes with sluglines and synopses, 2 locations. Real texture, not Character A. | The app opens with a story already in it |
-| **gp2610** | Port `gemini_client.py` to Vertex: `genai.Client(vertexai=True, project="nyu-ai-builder26nyc-9338", location="us-central1")`, `TEXT_MODEL = "gemini-2.5-flash"`. Then the dialogue endpoint. | No AI Studio key anywhere and nothing 404s |
+| Who | Tab | Use this | Done when |
+|---|---|---|---|
+| **Sahaj** | Authentication + Imagen (storyboard) | **`backend/app/consistency.py` is yours now.** `compile_identity_card()` → `generate_reference_sheet()` → `fingerprint()` → `generate_shot_with_referee()`. That last one returns `(frame_bytes, {name: Verdict}, attempts)` and the Verdict carries `.score`. Show the score on each frame. | Shot 1 and shot 6 are visibly the same person, with a score badge per frame |
+| **kk / kik728** | Character builder | **`data/seed/character_questions.json`.** 100 questions, 7 parts, and 12 flagged `is_core`. Ask the 12 core first, they gate a character as usable for dialogue. Emit a flat `{question_text: answer}` dict, which is exactly what `compile_identity_card()` and `compile_voice_card()` consume. | A character with 12 answers produces both cards |
+| **gaurav / gp2610** | Location scouting | `backend/app/tools/locations.py` already does `places:searchText` correctly with the field mask. Add photos via Places Photos and **cache them to disk**, because Places photo URLs expire and the demo cannot depend on a live fetch. | Real places, real photos, real coordinates, attachable to a scene |
+| **Sampreeth** | Knowledge base + Script builder + front and back end | `backend/app/voice.py`. Voice Cards, per-character dialogue sub-agents, the voice referee. | Three characters in a scene each speak in their own measurably distinct voice |
+
+### Contract between tabs, so nobody blocks
+
+Character builder produces `{question_text: answer}`. That dict is the only input
+the Identity Card and Voice Card compilers need. Everything downstream, faces and
+voices both, is derived from it. So kk's tab unblocks Sahaj's and mine, and
+nothing else is coupled.
+
+### The one gotcha that will cost you 15 minutes
+
+If every Vertex call returns **429 RESOURCE_EXHAUSTED**, your ADC has no quota
+project and you are being billed against a starvation-tier bucket:
+
+    gcloud auth application-default set-quota-project nyu-ai-builder26nyc-9338
+
+That single command was the difference between everything failing and everything
+working. Image generation also runs about **30 seconds per frame** and the
+project is shared with every other team in the room, so **cache every generated
+image to disk and commit it.** Live generation on stage is a bonus that is
+allowed to fail, not the demo.
 
 ## Demo spine, five minutes
 
