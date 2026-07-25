@@ -340,34 +340,69 @@ class Graph:
         Lexical on purpose. A model asked "did she just reveal something" answers
         differently on different runs, and a check that is only sometimes right is
         worse than one that is narrow and always right. The rule: a fact known to
-        someone else, absent from this character's horizon, whose distinctive
+        someone else, absent from this character's horizon, whose DISTINCTIVE
         words appear in the line, is a violation.
+
+        Two things make it quiet enough to leave switched on, and both were put
+        here because the naive version fired on correct lines:
+
+        **One, a word is only evidence if it is rare in this story.** In The Night
+        Route almost every fact contains "night" and "route", so matching on them
+        flags any line about the job. Tokens are weighted by how many facts they
+        appear in, and a token in more than a third of them is treated as
+        background rather than as a reference.
+
+        **Two, a paraphrase of something they already know is not a violation.**
+        Maya's copy of a fact reads "Ravi has run the night route for twenty-two
+        years" and Ravi's own reads "He has run the night route for twenty-two
+        years". Those are one fact and two keys, so a check that compares keys
+        alone accuses him of knowing his own history. Candidates whose words are
+        mostly contained in something already inside the horizon are dropped.
 
         Same shape of check as `voice._check_scene_for_secrets`, aimed at one
         character's line rather than at the shared scene brief.
         """
+        from collections import Counter
+
         self.sync_from_store(story_id)
-        known = {f["key"] for f in self.horizon(story_id, character_id, scene_number)}
+        st = store.story(story_id)
+        mine = self.horizon(story_id, character_id, scene_number)
+        known_keys = {f["key"] for f in mine}
+        known_tokens = [_tokens(f["fact"]) for f in mine if f["fact"]]
         said = _tokens(text)
+
+        candidates = [e for e in self.for_story(story_id)
+                      if e.kind in ("knows", "knows_about") and e.dst_text]
+
+        # Document frequency over the distinct facts in this story.
+        corpus = {e.dst_id or fact_key(e.dst_text): _tokens(e.dst_text)
+                  for e in candidates}
+        df = Counter(t for toks in corpus.values() for t in toks)
+        ceiling = max(1.0, 0.34 * len(corpus))
+
         hits = []
-        for e in self.for_story(story_id):
-            if e.kind not in ("knows", "knows_about"):
-                continue
+        for e in candidates:
             key = e.dst_id or fact_key(e.dst_text)
-            if key in known or e.src_id == character_id:
+            if key in known_keys or e.src_id == character_id:
                 continue
             distinctive = _tokens(e.dst_text)
             if not distinctive:
                 continue
-            overlap = distinctive & said
-            # Two distinctive words in common is a reference, one is a
-            # coincidence. Tuned to stay quiet: a supervisor that cries wolf gets
-            # switched off, and then it catches nothing at all.
+            # Already known under different words.
+            if any(len(distinctive & k) / len(distinctive) >= 0.6
+                   for k in known_tokens if k):
+                continue
+            overlap = {t for t in distinctive & said if df[t] <= ceiling}
+            # Two rare words in common is a reference, one is a coincidence. A
+            # supervisor that cries wolf gets switched off, and then it catches
+            # nothing at all.
             if len(overlap) >= 2:
+                holder = st.characters.get(e.src_id)
                 hits.append({"fact": e.dst_text,
                              "matched": sorted(overlap),
                              "learns_in_scene": e.since_scene,
-                             "held_by": e.src_id})
+                             "held_by": holder.name if holder else e.src_id,
+                             "held_by_id": e.src_id})
         return hits
 
 
