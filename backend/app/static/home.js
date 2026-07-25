@@ -21,9 +21,28 @@
       ...opts,
       headers: opts?.body ? { "Content-Type": "application/json" } : undefined,
     });
+    // The interview writes canon, so it is behind the same guard as every other
+    // router. This page carries no Google token of its own, so when auth is
+    // switched on in production the honest thing is to send the filmmaker to the
+    // app to sign in rather than to show an empty form that silently fails on
+    // every answer. With auth off, which is the local and demo case, this never
+    // fires.
+    if (r.status === 401) { needsSignIn(); throw new Error("sign in required"); }
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
     return r.json();
   };
+
+  function needsSignIn() {
+    show("landing");
+    q("#goStart").hidden = true;
+    q("#goResume").hidden = true;
+    q("#others").innerHTML = "";
+    q("#landingNote").innerHTML =
+      `Sign in first. <button class="linky" id="toSignIn"
+        style="text-decoration:underline">Open the app</button> and come back.`;
+    const b = q("#toSignIn");
+    if (b) b.onclick = () => { location.href = "/"; };
+  }
 
   let S = null;              // interview state from the server
   let i = 0;                 // which step is on screen
