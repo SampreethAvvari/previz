@@ -81,7 +81,24 @@
   color: var(--ink); border-radius: 6px; padding: 5px 9px; font-size: 11px;
   cursor: pointer; }
 .who button:disabled { opacity: .4; cursor: not-allowed; background: none; }
-#ai input.f { width: 100%; }
+#ai input.f, #ai select.f { width: 100%; }
+
+/* One labelled group per element the panel can write. The label says what you
+ * get, and the tag says whether it costs a model call, because on a shared lab
+ * project that is the difference between instant and thirty seconds. */
+.ax { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
+  margin-bottom: 7px; background: var(--panel); }
+.ax-h { display: flex; align-items: center; font-size: 12px; color: var(--ink);
+  margin-bottom: 7px; }
+.ax-h .tag { margin-left: auto; font: 500 9px var(--mono); padding: 2px 6px;
+  border-radius: 20px; letter-spacing: .04em; text-transform: uppercase; }
+.ax-h .tag.now { color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.ax-h .tag.ai { color: var(--script);
+  background: color-mix(in srgb, var(--script) 16%, transparent); }
+.ax-r { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.ax-r:last-child { margin-bottom: 0; }
+
 .go { width: 100%; background: color-mix(in srgb, var(--script) 22%, transparent);
   border: 1px solid color-mix(in srgb, var(--script) 50%, transparent);
   color: var(--ink); border-radius: 8px; padding: 8px; font-size: 12px;
@@ -146,22 +163,74 @@
   <!-- the agents ------------------------------------------------------ -->
   <aside id="ai">
     <div>
-      <div class="eyebrow">Character agents</div>
-      <div class="tiny faint" style="margin-bottom:8px">
-        One sub-agent per character, built from that character's frozen Voice Card
-        verbatim and bounded by what they know as of this scene. Each line is
-        scored against their own voice fingerprint.
+      <div class="eyebrow">Write the next element</div>
+      <div class="tiny faint" style="margin-bottom:10px">
+        One element per press, never a whole scene. It arrives as a card below and
+        nothing reaches the page until you insert it.
       </div>
-      <div id="cast"></div>
-    </div>
 
-    <div>
-      <div class="eyebrow">Action</div>
-      <input class="f" id="intent" placeholder="what this beat has to do">
-      <button class="go" id="btnAction">Write one action paragraph</button>
-      <div class="tiny faint" style="margin-top:6px">
-        One paragraph, never a scene. The limit is enforced by the response
-        schema, not by asking.
+      <!-- Scene heading. No model: a slugline is three fields, and a model asked
+           to guess them is a model that invents a location you did not pick. -->
+      <div class="ax">
+        <div class="ax-h">Scene heading<span class="tag now">instant</span></div>
+        <div class="ax-r">
+          <select class="f" id="ie" style="width:88px"></select>
+          <input class="f" id="loc" placeholder="BUS DEPOT OFFICE">
+        </div>
+        <div class="ax-r">
+          <select class="f" id="tod"></select>
+          <button class="go" id="btnSlug" style="margin:0">Insert</button>
+        </div>
+      </div>
+
+      <!-- Action. -->
+      <div class="ax">
+        <div class="ax-h">Action<span class="tag ai">ActionWriter</span></div>
+        <input class="f" id="intent" placeholder="what this beat has to do · optional">
+        <button class="go" id="btnAction">Write one paragraph</button>
+      </div>
+
+      <!-- Dialogue. The character picker is the point: a line belongs to one
+           voice, and the sub-agent is built from that character's card alone. -->
+      <div class="ax">
+        <div class="ax-h">Dialogue<span class="tag ai" id="whoTag">per character</span></div>
+        <select class="f" id="who"></select>
+        <button class="go" id="btnLine">Write one line</button>
+        <div class="tiny faint" style="margin-top:5px">
+          Scored against that character's own voice fingerprint. A character under
+          12 core answers cannot be picked, because writing them would be
+          inventing them.
+        </div>
+      </div>
+
+      <!-- Location, gaurav's Scout. Inserts as a scene heading, which is what a
+           real place actually is once it reaches the page. -->
+      <div class="ax">
+        <div class="ax-h">Location<span class="tag ai">Scout · Places</span></div>
+        <input class="f" id="need" placeholder="a working bus depot you can shoot at night">
+        <div class="ax-r">
+          <input class="f" id="region" value="New York, NY">
+          <button class="go" id="btnLoc" style="margin:0">Scout</button>
+        </div>
+      </div>
+
+      <!-- Transition. -->
+      <div class="ax">
+        <div class="ax-h">Transition<span class="tag now">instant</span></div>
+        <div class="ax-r">
+          <select class="f" id="trans"></select>
+          <button class="go" id="btnTrans" style="margin:0">Insert</button>
+        </div>
+      </div>
+
+      <!-- The supervisor. Reads the page, writes nothing. -->
+      <div class="ax">
+        <div class="ax-h">Continuity<span class="tag ai">ScriptSupervisor</span></div>
+        <button class="go" id="btnCheck">Check this scene</button>
+        <div class="tiny faint" style="margin-top:5px">
+          Checks the page against canon and against what each character knows as
+          of this scene. Findings only, never edits.
+        </div>
       </div>
     </div>
 
@@ -172,9 +241,6 @@
 
     <div style="flex:1">
       <div class="eyebrow">Waiting for you</div>
-      <div class="tiny faint" style="margin-bottom:8px">
-        Nothing is written to the page until you insert it.
-      </div>
       <div id="cards"></div>
     </div>
   </aside>

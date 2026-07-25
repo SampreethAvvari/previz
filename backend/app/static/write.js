@@ -267,12 +267,19 @@ function trace(text, cls, agent) {
 async function run(url, body, onEvent) {
   if (running) return;
   running = true;
-  document.querySelectorAll(".who button, .go").forEach((b) => b.disabled = true);
+  document.querySelectorAll(".go").forEach((b) => b.disabled = true);
   try {
     const res = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      // A refusal arrives as JSON, not as a stream. Read it and say so, rather
+      // than opening a reader on it and going quiet.
+      const d = await res.json().catch(() => ({}));
+      trace(d.detail || `request failed with ${res.status}`, "bad");
+      return;
+    }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
@@ -291,8 +298,8 @@ async function run(url, body, onEvent) {
     trace(`transport failed: ${e.message}`, "bad");
   } finally {
     running = false;
-    paintCast();
     document.querySelectorAll(".go").forEach((b) => b.disabled = false);
+    paintWho();          // last, so it can re-disable Dialogue if nobody is ready
   }
 }
 
@@ -307,6 +314,18 @@ function onEvent(ev) {
   else if (ev.t === "partial" && ev.field === "action") {
     card({ agent: "ActionWriter", line: ev.text, score: null,
            elements: [{ type: "action", text: ev.text }] });
+  } else if (ev.t === "tool_call") trace(`calling ${ev.tool}`);
+  else if (ev.t === "tool_result") trace(`${ev.tool} · ${ev.summary}`);
+  else if (ev.t === "proposal") {
+    // A supervisor finding is a note, not an element. It gets a card with no
+    // Insert, because there is nothing here that belongs on the page.
+    card({ agent: `finding · ${ev.field}`, line: ev.rationale, score: null,
+           elements: [] });
+  } else if (ev.t === "data" && ev.locations) {
+    // Handled here rather than on the per place event, so a live search and the
+    // seeded fallback both render exactly once.
+    ev.locations.forEach(locationCard);
+    if (ev.live === false) trace("seeded locations, no Maps key configured", "ctx");
   } else if (ev.t === "error") trace(ev.message, "bad");
   else if (ev.t === "run_end") trace(`done in ${ev.ms} ms`);
 }
@@ -324,7 +343,13 @@ function card(p) {
   d.querySelector(".ag").textContent = p.agent;
   d.querySelector(".txt").textContent =
     (p.elements || []).map((e) => e.text).join("\n") || p.line;
-  d.querySelector(".ins").onclick = () => { insert(p.elements || []); d.remove(); };
+  const ins = d.querySelector(".ins");
+  if ((p.elements || []).length) {
+    ins.onclick = () => { insert(p.elements); d.remove(); };
+  } else {
+    ins.remove();                    // a finding has nothing to put on the page
+    d.querySelector(".no").textContent = "Dismiss";
+  }
   d.querySelector(".no").onclick = () => d.remove();
   $("cards").prepend(d);
 }
@@ -341,26 +366,75 @@ function insert(elements) {
   save();
 }
 
-function paintCast() {
-  $("cast").innerHTML = "";
+function paintWho() {
+  // The picker carries the readiness on its face: a character's Voice Card
+  // version and how many facts they know as of this scene, or the core answer
+  // count when they are not writable yet.
+  const sel = $("who");
+  sel.innerHTML = "";
   cast.forEach((c) => {
-    const d = document.createElement("div");
-    d.className = "who";
-    const st = c.ready
-      ? `card v${c.canon_version} · knows ${c.knows.length}`
-      : `${c.core_answered}/12 core answers`;
-    d.innerHTML = `<span class="nm"></span><span class="st">${st}</span>
-      <button ${c.ready ? "" : "disabled"}>Line</button>`;
-    d.querySelector(".nm").textContent = c.name;
-    d.querySelector("button").onclick = () => writeLine(c);
-    $("cast").appendChild(d);
+    const o = document.createElement("option");
+    o.value = c.id;
+    o.disabled = !c.ready;
+    o.textContent = c.ready
+      ? `${c.name} · card v${c.canon_version} · knows ${c.knows.length}`
+      : `${c.name} · ${c.core_answered}/12 core answers`;
+    sel.appendChild(o);
   });
+  if (!cast.length) {
+    const o = document.createElement("option");
+    o.textContent = "nobody is in this scene yet";
+    o.disabled = true;
+    sel.appendChild(o);
+  }
+  const ready = cast.filter((c) => c.ready).length;
+  $("whoTag").textContent = `${ready} of ${cast.length} ready`;
+  $("btnLine").disabled = !ready;
+  const first = cast.find((c) => c.ready);
+  if (first) sel.value = first.id;
 }
 
-function writeLine(c) {
+/* Each of these writes exactly one element. Two of them never touch the network,
+ * and that is deliberate: a slugline and a transition are choices, not
+ * generations, and asking a model to guess a location it was not given is how you
+ * end up with a scene set somewhere nobody picked. */
+
+function localInsert(type, text) {
+  card({ agent: "you", line: text, score: null,
+         elements: [{ type: type, text: text }] });
+}
+
+function insertSlug() {
+  const loc = $("loc").value.trim();
+  if (!loc) { $("loc").focus(); return; }
+  const tod = $("tod").value;
+  localInsert("scene_heading",
+              `${$("ie").value} ${loc.toUpperCase()}` + (tod ? ` - ${tod}` : ""));
+}
+
+function writeLine() {
+  const c = cast.find((x) => x.id === $("who").value);
+  if (!c) return;
   trace(`asking ${c.name}'s sub-agent for one line`);
   run(`/api/scenes/${scene}/next-line`,
       { character_id: c.id, on_page: canvasText() }, onEvent);
+}
+
+function scoutLocation() {
+  const need = $("need").value.trim();
+  if (!need) { $("need").focus(); return; }
+  trace("scouting real places");
+  run("/api/scout",
+      { need: need, region: $("region").value, scene: scene }, onEvent);
+}
+
+function locationCard(l) {
+  // A real place becomes a scene heading, because that is what a location is once
+  // it reaches the page. The address stays on the card, not in the script.
+  const guess = `${$("ie").value} ${l.name.toUpperCase()}`
+    + ($("tod").value ? ` - ${$("tod").value}` : "");
+  card({ agent: `Scout · ${l.address || "no address"}`, line: guess, score: null,
+         elements: [{ type: "scene_heading", text: guess }] });
 }
 
 /* ------------------------------------------------------------------- scenes */
@@ -383,7 +457,7 @@ async function loadScene(n) {
   const d = await api(`/api/scenes/${n}/screenplay`);
   cast = d.cast;
   render(d.lines);
-  paintCast();
+  paintWho();
   $("pages").textContent =
     `${d.stats.pages} pages · ${d.stats.elements} elements`;
   $("saved").textContent = "saved";
@@ -406,6 +480,22 @@ async function loadScene(n) {
   document.addEventListener("selectionchange", () => {
     if (document.activeElement === c) markHere();
   });
+  // The pickers come from the grammar too, so the times of day the editor offers
+  // are the ones the parser recognises in a slugline.
+  fill($("ie"), G.int_ext);
+  fill($("tod"), G.times);
+  fill($("trans"), G.transitions);
+  $("ie").value = "INT.";
+  $("tod").value = "NIGHT";
+
+  $("btnSlug").onclick = insertSlug;
+  $("btnLine").onclick = writeLine;
+  $("btnLoc").onclick = scoutLocation;
+  $("btnTrans").onclick = () => localInsert("transition", $("trans").value);
+  $("btnCheck").onclick = () => {
+    trace("supervising the page against canon and the knowledge horizon");
+    run(`/api/scenes/${scene}/supervise`, {}, onEvent);
+  };
   $("btnAction").onclick = () => {
     trace("asking the ActionWriter for one paragraph");
     run(`/api/scenes/${scene}/next-action`,
@@ -413,3 +503,12 @@ async function loadScene(n) {
   };
   await loadScene(1);
 })();
+
+function fill(sel, values) {
+  values.forEach((v) => {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = v;
+    sel.appendChild(o);
+  });
+}
