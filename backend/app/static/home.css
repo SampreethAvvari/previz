@@ -1,0 +1,143 @@
+/* The home page and the interview.
+ *
+ * Reuses the variables and the buttons from app.css and changes nothing in it.
+ *
+ * One rule drives the layout: there is exactly one thing to do on screen at any
+ * moment. The tabs are dense because they are a workspace. This is the front
+ * door, and a front door with six panels on it is a door nobody walks through.
+ */
+
+body.home {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+body.home #stars { position: fixed; inset: 0; z-index: 0; }
+
+body.home main {
+  position: relative; z-index: 1;
+  flex: 1;
+  display: flex; flex-direction: column;
+}
+body.home main[hidden] { display: none; }
+
+.wrap {
+  width: min(680px, calc(100vw - 48px));
+  margin: auto;
+  padding: 48px 0;
+}
+
+.mark {
+  font: 600 10.5px var(--mono);
+  letter-spacing: 0.26em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 22px;
+}
+
+.home h1 {
+  font-size: clamp(30px, 4.6vw, 44px);
+  line-height: 1.12; letter-spacing: -0.02em; font-weight: 600;
+  margin: 0 0 16px;
+}
+.home h2 {
+  font-size: clamp(23px, 3.1vw, 31px);
+  line-height: 1.22; letter-spacing: -0.015em; font-weight: 500;
+  margin: 0 0 10px;
+}
+.lede {
+  color: var(--ink-dim); font-size: 15.5px; line-height: 1.6;
+  margin: 0 0 30px; max-width: 52ch;
+}
+.hint {
+  color: var(--ink-faint); font-size: 13px; line-height: 1.55;
+  margin: 0 0 22px; max-width: 56ch; min-height: 20px;
+}
+
+.acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 20px; }
+button.act.big { padding: 12px 24px; font-size: 14px; border-radius: 9px; }
+
+/* The field is the loudest thing on the page, because it is the only thing being
+ * asked for. */
+.f.big {
+  font-size: 17px; padding: 14px 16px; border-radius: 10px;
+  line-height: 1.5;
+}
+.f.big:focus { border-color: color-mix(in srgb, var(--accent) 62%, transparent); }
+textarea.f.big { min-height: 92px; resize: vertical; }
+
+.linky {
+  background: none; border: none; cursor: pointer; padding: 0;
+  color: var(--ink-faint); font: 500 12px var(--ui);
+  transition: color var(--t) var(--ease);
+}
+.linky:hover { color: var(--ink); }
+
+/* ------------------------------------------------------------------ the bar */
+
+.askbar {
+  display: flex; align-items: center; gap: 18px;
+  padding: 16px 24px; border-bottom: 1px solid var(--line);
+}
+.askbar .mark { margin: 0; }
+.steps { display: flex; gap: 18px; flex: 1; }
+.step { display: flex; align-items: center; gap: 7px; }
+.step .dot {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 1.5px solid var(--line-bright);
+  display: grid; place-items: center;
+  font: 600 8px var(--mono); color: var(--bg);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+.step .nm { font-size: 12px; color: var(--ink-faint); }
+.step.on .nm { color: var(--ink); }
+.step.on .dot { border-color: var(--accent); }
+.step.full .dot { background: var(--ok); border-color: var(--ok); }
+.step.full .dot::after { content: "✓"; }
+.step .of { font: 500 10px var(--mono); color: var(--ink-faint); }
+
+.askfoot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 24px; border-top: 1px solid var(--line);
+}
+
+.who {
+  font: 600 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 12px; min-height: 14px;
+}
+
+#saved { transition: opacity 240ms var(--ease); }
+
+/* When the look opener has been answered, the axes it filled are listed once so
+ * the filmmaker sees what their sentence became rather than being surprised by
+ * it seven questions later. */
+.suggesting {
+  margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line);
+}
+.suggesting .row {
+  display: flex; gap: 12px; padding: 5px 0; font-size: 12.5px;
+}
+.suggesting .k {
+  font: 600 9.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); width: 68px; flex: none; padding-top: 3px;
+}
+.suggesting .v { color: var(--ink-dim); line-height: 1.5; }
+
+.others { margin-top: 34px; }
+.others .row {
+  display: flex; align-items: baseline; gap: 12px;
+  width: 100%; text-align: left; padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.others .row .t { font-size: 14px; color: var(--ink-dim); }
+.others .row:hover .t { color: var(--ink); }
+
+/* ----------------------------------------------------------------- the end */
+
+.facts { display: grid; gap: 9px; margin: 4px 0 8px; }
+.facts .row { display: flex; gap: 12px; align-items: baseline; font-size: 13.5px; }
+.facts .n { font: 600 15px var(--mono); color: var(--ink); min-width: 34px; }
+.facts .l { color: var(--ink-dim); }
+
+@media (max-width: 720px) {
+  .steps { display: none; }
+  .askbar, .askfoot { padding: 14px 18px; }
+}

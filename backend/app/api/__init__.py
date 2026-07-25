@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 
 from app.api import auth as auth_routes
 from app.api import bible as bible_routes
-from app.api import board, cast, health, knowledge, script, scout
+from app.api import board, cast, health, interview, knowledge, script, scout
 from app.auth import current_user
 
 api = APIRouter(prefix="/api")
@@ -34,6 +34,9 @@ api.include_router(health.router, tags=["health"])
 
 guarded = [Depends(current_user)]
 api.include_router(bible_routes.router, tags=["bible"], dependencies=guarded)
+# Guarded like the rest. It is the front door, and it writes canon on every
+# answer, so it is not a route that can be open.
+api.include_router(interview.router, tags=["interview"], dependencies=guarded)
 api.include_router(knowledge.router, tags=["knowledge"], dependencies=guarded)
 api.include_router(cast.router, tags=["cast"], dependencies=guarded)
 api.include_router(board.router, tags=["board"], dependencies=guarded)

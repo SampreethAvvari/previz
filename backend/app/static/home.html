@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magic Hour</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/home.css">
+</head>
+<body class="home">
+
+<canvas id="stars"></canvas>
+
+<!-- Landing. One decision: start, or carry on. -->
+<main id="landing">
+  <div class="wrap">
+    <div class="mark">Magic Hour</div>
+    <h1>Tell us about your film.</h1>
+    <p class="lede">
+      A few questions. Your answers become the story bible every scene, every
+      storyboard and every line of dialogue is built from.
+    </p>
+    <div class="acts">
+      <button class="act primary big" id="goResume" hidden></button>
+      <button class="act big" id="goStart">Start a new film</button>
+    </div>
+    <div class="tiny faint" id="landingNote"></div>
+    <div class="others" id="others"></div>
+  </div>
+</main>
+
+<!-- The interview. One question, nothing else. -->
+<main id="ask" hidden>
+  <header class="askbar">
+    <button class="linky" id="quit">Magic Hour</button>
+    <div class="steps" id="secs"></div>
+    <span class="tiny faint mono" id="count"></span>
+  </header>
+
+  <div class="wrap">
+    <div class="who" id="who"></div>
+    <h2 id="qText">·</h2>
+    <p class="hint" id="qHint"></p>
+
+    <input class="f big" id="qInput" autocomplete="off">
+    <textarea class="f big" id="qArea" rows="3" hidden></textarea>
+
+    <div class="acts">
+      <button class="act primary big" id="next">Continue</button>
+      <button class="act big" id="skip">Skip</button>
+      <span class="tiny faint" id="saved"></span>
+    </div>
+
+    <div class="suggesting" id="suggesting" hidden></div>
+  </div>
+
+  <footer class="askfoot">
+    <button class="linky" id="back">Back</button>
+    <span class="tiny faint">Enter to continue</span>
+    <button class="linky" id="toBible">Open the bible</button>
+  </footer>
+</main>
+
+<!-- Done. -->
+<main id="done" hidden>
+  <div class="wrap">
+    <div class="mark">Ready</div>
+    <h1 id="doneTitle">·</h1>
+    <p class="lede" id="doneLine"></p>
+    <div class="facts" id="doneFacts"></div>
+    <div class="acts">
+      <button class="act primary big" id="doneBible">Open the bible</button>
+      <button class="act big" id="doneMore">Keep answering</button>
+    </div>
+  </div>
+</main>
+
+<script src="/static/home.js"></script>
+</body>
+</html>
