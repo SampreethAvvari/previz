@@ -134,6 +134,21 @@
 </head>
 <body>
 
+<!-- The sign-in gate, same mechanism as the shell: shown only when the server
+     says auth is enabled and there is no token yet. On localhost with auth off
+     it never appears. -->
+<div id="gate" style="display:none; position:fixed; inset:0; z-index:50;
+     background:color-mix(in srgb, var(--bg) 88%, transparent);
+     backdrop-filter:blur(6px); place-items:center">
+  <div class="panel pad" style="max-width:360px; text-align:center">
+    <div class="eyebrow">Magic Hour</div>
+    <div id="gateMsg" class="tiny muted" style="margin:10px 0 16px">
+      Sign in to open the Screenwriter.
+    </div>
+    <div id="gbtn" style="display:flex; justify-content:center"></div>
+  </div>
+</div>
+
 <div id="wrap">
 
   <!-- the scenes ------------------------------------------------------- -->

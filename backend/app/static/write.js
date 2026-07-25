@@ -11,8 +11,60 @@
  * built this way feel broken.
  */
 const $ = (id) => document.getElementById(id);
-const api = (p, o) => fetch(p, o).then((r) => r.ok ? r.json()
-  : r.json().then((e) => Promise.reject(new Error(e.detail || r.status))));
+
+/* Auth, the same mechanism as the shell: a Google ID token held in memory and
+ * sent as a Bearer header on every call. In memory only, matching app.js and for
+ * the same reason: a token in localStorage is readable by any script on the page.
+ * The cost is one silent GIS round trip per page load, which auto_select makes
+ * invisible for anyone already signed in on the shell. With auth disabled on the
+ * server (no client id configured), none of this runs and the page boots as the
+ * local user, so localhost never sees a sign-in screen. */
+let TOKEN = null;
+
+function authHeaders(hasBody) {
+  const h = {};
+  if (hasBody) h["Content-Type"] = "application/json";
+  if (TOKEN) h.Authorization = `Bearer ${TOKEN}`;
+  return h;
+}
+
+const api = (p, o) => fetch(p, { ...o, headers: authHeaders(Boolean(o?.body)) })
+  .then((r) => {
+    if (r.status === 401) { gate(true); throw new Error("sign in required"); }
+    return r.ok ? r.json()
+      : r.json().then((e) => Promise.reject(new Error(e.detail || r.status)));
+  });
+
+function gate(show, msg) {
+  $("gate").style.display = show ? "grid" : "none";
+  if (msg) $("gateMsg").textContent = msg;
+}
+
+async function ensureSignedIn() {
+  // /api/auth/config is an open route, so this call works signed out.
+  const cfg = await fetch("/api/auth/config").then((r) => r.json());
+  if (!cfg.enabled) return;              // localhost: auth off, local user
+  gate(true, "The Screenwriter needs the same sign in as the rest of Magic Hour.");
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.onerror = () => reject(new Error("could not reach Google Identity Services"));
+    s.onload = () => {
+      google.accounts.id.initialize({
+        client_id: cfg.client_id,
+        callback: (resp) => { TOKEN = resp.credential; gate(false); resolve(); },
+        auto_select: true,               // signed in on the shell: lands silently
+        cancel_on_tap_outside: false,
+      });
+      google.accounts.id.renderButton($("gbtn"),
+        { theme: "filled_black", size: "large", shape: "pill",
+          text: "signin_with", logo_alignment: "left" });
+      google.accounts.id.prompt();
+    };
+    document.head.append(s);
+  });
+}
 
 let G = null;            // the grammar, from the server
 let scene = 1;
@@ -271,9 +323,10 @@ async function run(url, body, onEvent) {
   document.querySelectorAll(".go").forEach((b) => b.disabled = true);
   try {
     const res = await fetch(url, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: authHeaders(true),
       body: JSON.stringify(body),
     });
+    if (res.status === 401) { gate(true); trace("sign in required", "bad"); return; }
     if (!res.ok) {
       // A refusal arrives as JSON, not as a stream. Read it and say so, rather
       // than opening a reader on it and going quiet.
@@ -528,6 +581,14 @@ async function loadScene(n) {
 /* --------------------------------------------------------------------- boot */
 
 (async function boot() {
+  // Sign in before anything, because every fetch below is behind the guard. A
+  // boot that died on its first 401 is exactly the blank page this replaces.
+  try {
+    await ensureSignedIn();
+  } catch (e) {
+    gate(true, String(e.message || e));
+    return;
+  }
   G = await api("/api/screenplay/grammar");
   applyLayout();
   buildToolbar();
