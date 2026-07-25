@@ -1,26 +1,20 @@
-"""Previs v1 spike — prove the core magic end-to-end against the REAL Google APIs.
-
-Run from the backend/ dir with the venv, after putting GEMINI_API_KEY in backend/.env:
+"""Previs CLI spike — run the shared pipeline against the REAL Google APIs and save PNGs.
 
     cd backend
     .venv/Scripts/python.exe spike.py                       # storyboard from the default noir scene
     .venv/Scripts/python.exe spike.py "INT. DINER - DAY..."  # storyboard from your own scene
-    .venv/Scripts/python.exe spike.py --single "a red vintage car in the rain, cinematic"  # one image only
+    .venv/Scripts/python.exe spike.py --single "a red car in the rain, cinematic"  # one image only
 
-Outputs land in backend/out/. GOOGLE_MAPS_API_KEY is optional (locations are skipped without it).
+Outputs land in backend/out/. GOOGLE_MAPS_API_KEY is optional.
 """
 import base64
-import json
-import sys
 import pathlib
-
-from google.genai import types
+import sys
 
 from app.config import settings
-from app.gemini_client import get_client, generate_image, TEXT_MODEL
+from app.gemini_client import generate_image
 from app.models import StylePreset
-from app.tools.storyboard import generate_storyboard_image
-from app.tools.locations import find_locations
+from app.pipeline import generate_storyboard
 
 OUT = pathlib.Path("out")
 OUT.mkdir(exist_ok=True)
@@ -31,66 +25,28 @@ DEFAULT_SCENE = (
 )
 
 
-def plan_shots(scene: str, n: int = 3) -> list[str]:
-    """Ask Gemini to break a scene into n shot descriptions."""
-    resp = get_client().models.generate_content(
-        model=TEXT_MODEL,
-        contents=(
-            f"Break this film scene into exactly {n} storyboard shots. "
-            f"Return ONLY a JSON list of objects, each with a 'description' field "
-            f"(a vivid one-sentence visual description of the shot). Scene:\n{scene}"
-        ),
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
-    )
-    try:
-        data = json.loads(resp.text)
-        shots = [d["description"] for d in data][:n]
-        if shots:
-            return shots
-    except Exception as e:
-        print(f"[warn] shot planning parse failed ({e}); using the whole scene as one shot")
-    return [scene]
-
-
 def single(prompt: str) -> None:
     print(f"Generating one image for: {prompt!r}")
     png = generate_image(prompt, "16:9")
-    path = OUT / "single.png"
-    path.write_bytes(png)
-    print(f"  -> wrote {path} ({len(png)} bytes)")
+    (OUT / "single.png").write_bytes(png)
+    print(f"  -> wrote out/single.png ({len(png)} bytes)")
 
 
 def storyboard(scene: str, style: StylePreset) -> None:
     print(f"Scene:\n  {scene}\n")
-    print(f"Style: {style.genre} / {style.visual_style} / {style.mood} / {style.era}\n")
+    print("Running pipeline...\n")
+    result = generate_storyboard(scene, style)
 
-    print("Planning shots...")
-    shots = plan_shots(scene)
-    for i, s in enumerate(shots, 1):
-        print(f"  {i}. {s}")
-    print()
-
-    print("Rendering storyboard frames...")
-    for i, shot in enumerate(shots, 1):
-        url = generate_storyboard_image(shot, style)
-        b64 = url.split(",", 1)[1]
-        path = OUT / f"shot_{i}.png"
+    for s in result["shots"]:
+        b64 = s["image_data_url"].split(",", 1)[1]
+        path = OUT / f"shot_{s['index'] + 1}.png"
         path.write_bytes(base64.b64decode(b64))
-        print(f"  -> wrote {path}")
-    print()
+        print(f"  {s['index'] + 1}. {s['description']}")
+        print(f"     -> {path}")
 
-    print("Scouting locations...")
-    if settings.google_maps_api_key:
-        locs = find_locations(scene)
-        if locs:
-            for loc in locs:
-                print(f"  - {loc.name} — {loc.address}")
-        else:
-            print("  (no locations returned)")
-    else:
-        print("  (skipped — no GOOGLE_MAPS_API_KEY set)")
-
-    print(f"\nDone. Open the PNGs in backend/{OUT}/ to see the storyboard.")
+    names = [loc["name"] for loc in result["locations"]]
+    print("\nLocations:", ", ".join(names) if names else "(none / no maps key)")
+    print(f"\nDone. Open the PNGs in backend/{OUT}/.")
 
 
 if __name__ == "__main__":
