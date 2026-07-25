@@ -19,6 +19,7 @@ let scene = 1;
 let cast = [];
 let saveTimer = null;
 let running = false;
+let running_exchange = [];   // elements accumulated across one orchestrated run
 
 /* ------------------------------------------------------------------ layout */
 
@@ -310,7 +311,18 @@ function onEvent(ev) {
     trace(`context assembled · ${n} chars · ${ev.chunk_ids.length} chunks retrieved`
       + (ev.dropped.length ? ` · dropped ${ev.dropped.join(", ")}` : ""), "ctx");
   } else if (ev.t === "violation") trace(`${ev.kind} · ${ev.detail}`, "bad");
-  else if (ev.t === "line_ready") card(ev.line);
+  else if (ev.t === "line_ready") {
+    card(ev.line);
+    // A turn number means this line is part of an orchestrated exchange, so keep
+    // its elements to offer the whole thing as one insert when the run ends.
+    if (ev.line.turn) {
+      if (ev.line.beat) {
+        trace(`turn ${ev.line.turn} · ${ev.line.beat}`, "ctx",
+              ev.line.character);
+      }
+      running_exchange.push(...(ev.line.elements || []));
+    }
+  }
   else if (ev.t === "partial" && ev.field === "action") {
     card({ agent: "ActionWriter", line: ev.text, score: null,
            elements: [{ type: "action", text: ev.text }] });
@@ -327,7 +339,18 @@ function onEvent(ev) {
     ev.locations.forEach(locationCard);
     if (ev.live === false) trace("seeded locations, no Maps key configured", "ctx");
   } else if (ev.t === "error") trace(ev.message, "bad");
-  else if (ev.t === "run_end") trace(`done in ${ev.ms} ms`);
+  else if (ev.t === "run_end") {
+    trace(`done in ${ev.ms} ms`);
+    // The whole exchange as one card, on top of the per line ones. Inserting four
+    // lines should not be four clicks, and the per line cards are still there for
+    // when you only want two of them.
+    if (running_exchange.length > 2) {
+      const lines = running_exchange.filter((e) => e.type === "dialogue").length;
+      card({ agent: `the exchange · ${lines} lines`, line: "",
+             score: null, elements: running_exchange.slice() });
+    }
+    running_exchange = [];
+  }
 }
 
 function card(p) {
@@ -490,6 +513,15 @@ async function loadScene(n) {
 
   $("btnSlug").onclick = insertSlug;
   $("btnLine").onclick = writeLine;
+  $("btnExchange").onclick = () => {
+    const n = Math.max(1, Math.min(Number($("turns").value) || 4, 12));
+    running_exchange = [];
+    trace(`directing ${n} turns across ${cast.filter((c) => c.ready).length} `
+          + `character sub-agents`);
+    run(`/api/scenes/${scene}/exchange`,
+        { turns: n, order: "director", brief: $("brief").value,
+          on_page: canvasText() }, onEvent);
+  };
   $("btnLoc").onclick = scoutLocation;
   $("btnTrans").onclick = () => localInsert("transition", $("trans").value);
   $("btnCheck").onclick = () => {

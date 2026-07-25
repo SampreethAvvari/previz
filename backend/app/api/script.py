@@ -516,6 +516,202 @@ def next_line(number: int, body: LineIn, story_id: str | None = None):
     return stream(work, agent="DialogueDirector")
 
 
+class ExchangeIn(BaseModel):
+    turns: int = 4
+    brief: str = ""
+    on_page: str = ""
+    character_ids: list[str] = []
+    order: str = "director"      # director | alternate
+
+
+def _plan_turns(names: list[str], brief: str, turns: int, emit) -> list[dict]:
+    """The DialogueDirector picks the running order and a beat for each turn.
+
+    This is the orchestration layer above the character agents, and it is one call
+    for the whole exchange rather than one per turn, because a director that
+    deliberates before every line costs four extra round trips to tell you what
+    alternation would have told you for free.
+
+    The director is given the camera visible brief and NOTHING ELSE. That is the
+    knowledge horizon applied one level up: a director who knew Maya's secret could
+    write Ravi a beat about it, the beat goes into Ravi's sub-agent as an
+    instruction, and the secret has leaked through the orchestrator instead of
+    through the brief. It cannot write what it was never told.
+
+    Falls back to strict alternation on any failure. A dialogue button that fails
+    because the planner failed would be a worse product than one that alternates.
+    """
+    import json as _json
+
+    from google.genai import types
+
+    from app.consistency import _SAFETY, _client
+    from app.voice import VOICE_MODEL
+
+    fallback = [{"speaker": names[i % len(names)], "beat": ""}
+                for i in range(turns)]
+    try:
+        resp = _client().models.generate_content(
+            model=VOICE_MODEL,
+            contents=(
+                "You are directing a scene. Decide who speaks, in what order, and "
+                "what each line has to accomplish dramatically.\n\n"
+                f"WHO IS IN THE ROOM: {', '.join(names)}\n"
+                f"THE SCENE, as a camera in the room would see it: {brief}\n\n"
+                f"Plan exactly {turns} turns. A character may speak twice in a row "
+                "if that is truer than trading lines. Do not write the dialogue "
+                "itself, and do not invent facts about anyone: each beat is one "
+                "short instruction to an actor, for example \"deflect the question "
+                "without answering it\" or \"ask again, warmer this time\".\n\n"
+                'Return JSON {"rationale": "one sentence on the shape of the '
+                'exchange", "turns": [{"speaker": "exact name", "beat": "..."}]}'),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json", safety_settings=_SAFETY),
+        )
+        d = _json.loads(resp.text)
+        plan = [t for t in d.get("turns", []) if t.get("speaker") in names]
+        if not plan:
+            raise ValueError("director returned no usable turns")
+        emit.thinking(d.get("rationale", "")
+                      + " · " + " then ".join(t["speaker"] for t in plan),
+                      agent="DialogueDirector")
+        return plan[:turns]
+    except Exception as exc:                            # noqa: BLE001
+        emit.thinking(f"planner unavailable ({type(exc).__name__}), falling back "
+                      f"to strict alternation", agent="DialogueDirector")
+        return fallback
+
+
+@router.post("/scenes/{number}/exchange")
+def exchange(number: int, body: ExchangeIn, story_id: str | None = None):
+    """The whole exchange, orchestrated, streamed turn by turn, written nowhere.
+
+    One sub-agent per character, each built from its own frozen Voice Card verbatim
+    and never summarised, because re-summarising per call is exactly what makes a
+    voice drift across a script. No single agent holds every character, which is
+    what makes the voices genuinely separate rather than one model doing
+    impressions of several people.
+
+    Deliberately not a wrapper around voice.write_exchange, and the reason is only
+    about streaming: write_exchange returns every line at once, so wrapping it
+    gives forty seconds of nothing and then a wall of text. The turn loop here is
+    the same loop, calling the same verified speak() and referee_line(), so the
+    two cannot disagree about how a line is produced or scored. What it adds is an
+    event per turn, and a director that plans the running order instead of
+    alternating blindly.
+
+    Nothing is written to the scene. The writer inserts what they want.
+    """
+    sid = _sid(story_id)
+    st = store.story(sid)
+    sc = st.scene_by_number(number)
+    if not sc:
+        raise HTTPException(404, f"no scene {number}")
+    ids = body.character_ids or sc.characters
+    present = [st.characters[i] for i in ids if i in st.characters]
+    if not present:
+        raise HTTPException(400, "no characters in this scene")
+    turns = max(1, min(body.turns, 12))     # a hard cap: a loop bug costs quota
+
+    def work(emit):
+        from app.voice import _check_scene_for_secrets  # noqa: PLC2701
+        from app.voice import referee_line, speak
+
+        cards, refused = [], []
+        for ch in present:
+            if ch.core_answered < 12:
+                refused.append(ch.name)
+                emit.violation(
+                    "incomplete_character",
+                    f"{ch.name} has {ch.core_answered} of 12 core answers, so "
+                    f"they are not in this exchange. Writing them would be "
+                    f"inventing them.")
+                continue
+            if not ch.voice_card:
+                emit.thinking(f"{ch.name} has no Voice Card yet, compiling one",
+                              agent="DialogueCoach")
+            cards.append((ch, _card_for(ch)))
+            reindex_entity(sid, "character", ch.id)
+        if not cards:
+            raise RuntimeError(
+                f"nobody in scene {number} has the 12 core answers needed to "
+                f"write dialogue: {', '.join(refused)}")
+
+        # The brief is what a camera in the room could see. Private facts travel
+        # per character in `knows`, never here, because this string is shared with
+        # every sub-agent. Found by breaking it: a brief saying "Maya already knew
+        # and did not tell him" had Ravi accusing her of it on his third line.
+        brief = body.brief or f"{sc.slugline}. {sc.synopsis}"
+        knows = {ch.name: ch.knows_by(number) for ch, _ in cards}
+        for msg in _check_scene_for_secrets(brief, knows):
+            emit.violation("knowledge_leak", msg)
+
+        pack = build_pack(sid, query=brief,
+                          character_ids=[ch.id for ch, _ in cards],
+                          scene_number=number)
+        emit.context(pack.report()["slots"], pack.chunk_ids, pack.dropped)
+
+        by_name = {ch.name: (ch, card) for ch, card in cards}
+        for ch, card in cards:
+            emit.thinking(
+                f"sub-agent built from {ch.name}'s Voice Card v"
+                f"{card.canon_version} verbatim. Knows "
+                f"{len(knows.get(ch.name, []))} facts as of scene {number} and "
+                f"cannot refer to anything else.",
+                agent=f"{ch.name} · Voice Card v{card.canon_version}")
+
+        names = [ch.name for ch, _ in cards]
+        plan = (_plan_turns(names, brief, turns, emit) if body.order == "director"
+                else [{"speaker": names[i % len(names)], "beat": ""}
+                      for i in range(turns)])
+
+        heard = _heard_from(body.on_page or sc.body)
+        out, elements = [], []
+        for i, t in enumerate(plan):
+            ch, card = by_name[t["speaker"]]
+            cont = sc.continuity.get(ch.id) or {}
+            state = "; ".join(v for v in (cont.get("physical"),
+                                          cont.get("emotional")) if v)
+            beat = (t.get("beat") or "").strip()
+            # The beat rides in as a bracketed direction on the heard list, which
+            # is the same channel voice.py already uses for the retry nudge.
+            ctx = heard + ([f"(Your beat for this line: {beat})"] if beat else [])
+            agent_name = f"{ch.name} · Voice Card v{card.canon_version}"
+
+            line = speak(card, brief, knows.get(ch.name, []), state, ctx)
+            v = referee_line(line, card)
+            attempts = 1
+            if not v.passed:
+                emit.violation("voice_drift",
+                               f"{ch.name}: {v.reason}. Back to their own "
+                               f"sub-agent with the register named.")
+                line = speak(card, brief, knows.get(ch.name, []), state,
+                             ctx + [f"(That last attempt did not sound like you. "
+                                    f"Your register is: {card.register}. Try "
+                                    f"again, more like your sample lines.)"])
+                v = referee_line(line, card)
+                attempts = 2
+
+            silent = line.strip() == "[says nothing]"
+            if not silent:
+                heard.append(f"{ch.name.upper()}: {line}")
+            els = dialogue_block(ch.name, line)
+            elements += els
+            payload = {"character": ch.name, "character_id": ch.id, "line": line,
+                       "score": v.score, "passed": v.passed, "reason": v.reason,
+                       "canon_version": card.canon_version, "agent": agent_name,
+                       "attempts": attempts, "turn": i + 1, "beat": beat,
+                       "silent": silent, "elements": lines_json(els)}
+            emit.line_ready(payload)
+            out.append(payload)
+
+        return {"lines": out, "elements": lines_json(elements),
+                "refused": refused, "turns": len(out),
+                "order": body.order}
+
+    return stream(work, agent="DialogueDirector")
+
+
 class ActionLineIn(BaseModel):
     intent: str = ""
     on_page: str = ""

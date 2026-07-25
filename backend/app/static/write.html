@@ -203,6 +203,24 @@
         </div>
       </div>
 
+      <!-- The orchestrated version. A director plans the running order, then each
+           character's own sub-agent speaks its assigned beat. -->
+      <div class="ax">
+        <div class="ax-h">The exchange<span class="tag ai">DialogueDirector</span></div>
+        <div class="ax-r">
+          <input class="f" id="turns" type="number" value="4" min="1" max="12"
+                 style="width:64px">
+          <button class="go" id="btnExchange" style="margin:0">Write the exchange</button>
+        </div>
+        <input class="f" id="brief" placeholder="brief override · only what a camera can see">
+        <div class="tiny faint" style="margin-top:5px">
+          A director plans who speaks and what each line has to do, then every turn
+          goes to that character's own sub-agent. No agent holds two characters, so
+          the voices are separate rather than one model doing impressions. Roughly
+          fourteen seconds a turn.
+        </div>
+      </div>
+
       <!-- Location, gaurav's Scout. Inserts as a scene heading, which is what a
            real place actually is once it reaches the page. -->
       <div class="ax">
