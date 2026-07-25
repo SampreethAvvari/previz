@@ -1,0 +1,100 @@
+# Deploy main to Cloud Run. Keyless, via Workload Identity Federation.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# THIS WORKFLOW IS CORRECT AND CURRENTLY CANNOT RUN.
+#
+# It needs three one-time setup steps that require permissions the hackathon lab
+# account does not have. Someone with `owner` or `roles/resourcemanager.projectIamAdmin`
+# on nyu-ai-builder26nyc-9338 runs these once, then this file works and
+# scripts/watch-deploy.sh can be deleted.
+#
+#   PROJECT=nyu-ai-builder26nyc-9338
+#   NUMBER=775345250143
+#   REPO=SampreethAvvari/previz
+#
+#   # 1. let Cloud Build's service account actually build
+#   gcloud projects add-iam-policy-binding $PROJECT \
+#     --member="serviceAccount:$NUMBER-compute@developer.gserviceaccount.com" \
+#     --role="roles/cloudbuild.builds.builder"
+#
+#   # 2. a pool and provider GitHub can exchange its OIDC token against
+#   gcloud iam workload-identity-pools create github --location=global
+#   gcloud iam workload-identity-pools providers create-oidc github \
+#     --location=global --workload-identity-pool=github \
+#     --issuer-uri="https://token.actions.githubusercontent.com" \
+#     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+#     --attribute-condition="assertion.repository=='$REPO'"
+#
+#   # 3. let only this repo impersonate the deploy service account
+#   gcloud iam service-accounts add-iam-policy-binding \
+#     "$NUMBER-compute@developer.gserviceaccount.com" \
+#     --role="roles/iam.workloadIdentityUser" \
+#     --member="principalSet://iam.googleapis.com/projects/$NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+#
+# The attribute-condition in step 2 is not optional. Without it, ANY GitHub repo
+# in the world can exchange a token against this pool.
+#
+# There is no service account key here and there must never be one. A key is a
+# permanent credential in a public repo's settings, and the repo's own rules ban it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never two deploys racing to the same service. A cancelled run is cheaper than
+# two revisions fighting over which one serves traffic.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+env:
+  PROJECT: nyu-ai-builder26nyc-9338
+  REGION: us-central1
+  SERVICE: magic-hour
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # required to mint the OIDC token for WIF
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT }}
+          workload_identity_provider: projects/775345250143/locations/global/workloadIdentityPools/github/providers/github
+          service_account: 775345250143-compute@developer.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Context is the repo root, not backend/. The app reads
+      # data/seed/character_questions.json, and building from backend/ produces an
+      # image that boots, serves the whole UI, and 404s every /api route because
+      # main.py catches the import error by design. Quiet failure, so it is pinned
+      # here in a comment.
+      - name: Build and deploy
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --source . \
+            --region "$REGION" \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --memory 2Gi --cpu 2 --timeout 600 --port 8080 \
+            --set-env-vars "GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}"
+
+      # Smoke test the revision rather than trusting that a URL got printed. Note
+      # /api/health and not /healthz: Cloud Run's frontend intercepts /healthz and
+      # returns its own 404 without the request ever reaching the container.
+      - name: Smoke test
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
+          echo "deployed to $URL"
+          curl -fsS --max-time 40 "$URL/api/health"
+          curl -fsS --max-time 30 -o /dev/null "$URL/"
+          echo "· healthy"
