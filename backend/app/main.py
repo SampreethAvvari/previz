@@ -1,48 +1,45 @@
-"""Magic Hour. Serves the UI and mounts one router per tab.
+"""Magic Hour. Serves the UI and mounts the API.
 
-DO NOT ADD ROUTES TO THIS FILE. Add a module to app/routers/ that exposes
-`router`, and it is discovered automatically. That rule exists so five people can
-build five tabs on five branches with nothing to conflict on at merge time.
+DO NOT ADD ROUTES TO THIS FILE. Add a module under app/api/ and include it in
+app/api/__init__.py. That rule exists so several people can build several tabs on
+several branches with nothing to conflict on at merge time.
 """
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-
-from app import routers
-from app.models import StylePreset
-from app.pipeline import generate_storyboard
 
 app = FastAPI(title="Magic Hour")
 STATIC = Path(__file__).parent / "static"
 CACHE = Path(__file__).parent.parent / "demo_cache"
 
-MOUNTED = routers.register_all(app)
-print(f"  mounted tabs: {', '.join(MOUNTED) or 'none'}")
+# Mounted defensively on purpose. Several tabs are being written in parallel
+# right now, so app/api/ can be momentarily unimportable (a router referenced
+# before its module exists). One half-written tab must not stop the app from
+# booting, because a demo that will not start is worse than a tab that 404s.
+API_ERROR: str | None = None
+try:
+    from app.api import api
 
-# Cached generated frames, sheets and dialogue. Served straight from disk so the
-# demo survives the venue wifi dying, the lab project expiring, or the shared
-# image quota running out mid presentation. All three are live risks today.
+    app.include_router(api)
+    print("  api mounted")
+except Exception as exc:  # noqa: BLE001
+    API_ERROR = f"{type(exc).__name__}: {exc}"
+    print(f"  API FAILED TO MOUNT: {API_ERROR}")
+
+# Cached frames, sheets and dialogue, served from disk. The venue wifi dying, the
+# lab project expiring and the shared image quota running out are all live risks
+# today, and cached assets survive all three.
 if CACHE.is_dir():
     app.mount("/cache", StaticFiles(directory=CACHE), name="cache")
 
 
-class GenerateRequest(BaseModel):
-    scene: str
-    style: StylePreset = StylePreset()
-
-
 @app.get("/healthz")
-def healthz():
-    return {"ok": True, "tabs": MOUNTED}
-
-
-@app.post("/generate")
-def generate(req: GenerateRequest):
-    """Scene text + style -> storyboard frames + real filming locations."""
-    return generate_storyboard(req.scene, req.style)
+def healthz() -> dict:
+    return {"ok": API_ERROR is None, "api_error": API_ERROR,
+            "routes": sorted({r.path for r in app.routes
+                              if getattr(r, "path", "").startswith("/api/")})}
 
 
 @app.get("/")
