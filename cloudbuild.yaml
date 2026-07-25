@@ -62,7 +62,7 @@ steps:
     args:
       - build
       - -f
-      - backend/Dockerfile
+      - Dockerfile
       - -t
       - $_REGION-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_SERVICE:$SHORT_SHA
       - -t

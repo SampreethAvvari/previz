@@ -42,7 +42,7 @@ gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet >/dev/null 2>&1
 # Context is the repo root, not backend/, because the app reads
 # data/seed/character_questions.json. Building from backend/ produces an image that
 # boots, serves the UI, and 404s every /api route.
-docker build -q -f "$ROOT/backend/Dockerfile" \
+docker build -q -f "$ROOT/Dockerfile" \
   -t "$IMAGE:$TAG" -t "$IMAGE:latest" "$ROOT" >/dev/null
 docker push -q "$IMAGE:$TAG" >/dev/null
 docker push -q "$IMAGE:latest" >/dev/null

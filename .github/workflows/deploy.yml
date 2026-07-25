@@ -111,7 +111,7 @@ jobs:
           TAG="$(git rev-parse --short HEAD)"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
           echo "TAG=$TAG" >> $GITHUB_ENV
-          docker build -f backend/Dockerfile -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
+          docker build -f Dockerfile -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
           docker push "$IMAGE:$TAG"
           docker push "$IMAGE:latest"
 
