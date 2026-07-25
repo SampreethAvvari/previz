@@ -140,6 +140,22 @@
 .ck .cid:hover { color: var(--ink); border-color: var(--line-bright); }
 .ck .t { color: var(--ink-dim); font-size: 12.5px; line-height: 1.5; }
 
+/* ------------------------------------------------------------- the Style Card */
+
+.st-ask { display: flex; gap: 10px; align-items: flex-end; margin: 12px 0 4px; }
+.st-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 13px 16px;
+  margin-top: 14px;
+}
+.st-ax .lab { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--ink-dim); }
+.st-ax .tiny { margin-top: 5px; line-height: 1.45; }
+.st-foot { display: flex; gap: 14px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.st-foot .tiny { flex: 1; min-width: 220px; line-height: 1.5; }
+.warn-note { color: color-mix(in srgb, var(--warn) 62%, var(--ink-dim)); }
+.ok-note { color: color-mix(in srgb, var(--ok) 55%, var(--ink-dim)); }
+
 /* ------------------------------------------------------ the knowledge horizon */
 
 .hz-bar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 12px; }

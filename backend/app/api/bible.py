@@ -49,6 +49,57 @@ def create_story(body: StoryIn):
     return story_json(st)
 
 
+# -------------------------------------------------------------- the Style Card
+
+@router.get("/bible/style")
+def get_style(story_id: str | None = None):
+    """The style card, every axis present whether answered or not.
+
+    The pack never drops this slot, so an unanswered axis is not a cosmetic gap.
+    It is a decision the model will make on its own, differently, every time.
+    """
+    from app.style_card import get_style as _get
+    return _get(_sid(story_id))
+
+
+class StyleIn(BaseModel):
+    axes: dict[str, str] = {}
+    look: str | None = None
+
+
+@router.put("/bible/style")
+def put_style(body: StyleIn, story_id: str | None = None):
+    """Write the card. Typed by a person, so canon immediately (§5.1)."""
+    from app.style_card import set_style
+    return set_style(_sid(story_id), body.axes, body.look)
+
+
+class StyleAskIn(BaseModel):
+    description: str
+
+
+@router.post("/bible/style/compile")
+def compile_style(body: StyleAskIn, story_id: str | None = None):
+    """Turn a sentence about the film into proposed axes. Writes nothing.
+
+    Nobody types "palette: sodium vapour orange against wet blue-black". They type
+    "a wet night shift". This reads that and fills the form, and the filmmaker
+    edits it before saving, so inference never becomes canon on its own.
+    """
+    from app.style_card import compile_axes
+    sid = _sid(story_id)
+    st = store.story(sid)
+    try:
+        return {"ok": True, "axes": compile_axes(body.description, st.title,
+                                                 st.logline)}
+    except Exception as exc:                            # noqa: BLE001
+        # Never a 500. The form still works by hand, and a dead network must not
+        # take the tab down with it.
+        return {"ok": False,
+                "reason": f"{type(exc).__name__}: {exc}"[:200],
+                "axes": {}}
+
+
 @router.get("/bible/search")
 def search(q: str, story_id: str | None = None, k: int = 8,
            layers: str = "canon,draft"):

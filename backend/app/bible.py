@@ -77,6 +77,16 @@ class Index:
         self._lock = threading.RLock()
         self.chunks: dict[str, Chunk] = {}
         self._n = 0
+        # Vectors kept by text, not by chunk id.
+        #
+        # Reindexing drops an entity's chunks and writes new ones with new ids, so
+        # without this every edit throws away embeddings for text that did not
+        # change. Correcting one interview answer would silently degrade the whole
+        # story to lexical only until somebody noticed and ran the embed pass
+        # again. Identical text has an identical vector, so keying the cache on
+        # the text makes a reindex free for everything that stayed the same and
+        # leaves exactly the changed chunks to embed.
+        self._vectors: dict[str, list[float]] = {}
 
     def add(self, story_id: str, entity_type: str, entity_id: str | None,
             text: str, layer: str = "canon", source_ref: str = "",
@@ -84,10 +94,11 @@ class Index:
         with self._lock:
             self._n += 1
             cid = f"c{self._n:04d}"
+            body = text.strip()
             ch = Chunk(id=cid, story_id=story_id, entity_type=entity_type,
-                       entity_id=entity_id, layer=layer, text=text.strip(),
+                       entity_id=entity_id, layer=layer, text=body,
                        source_ref=source_ref, created_by=created_by,
-                       tokens=_tokens(text))
+                       tokens=_tokens(text), embedding=self._vectors.get(body))
             self.chunks[cid] = ch
             return ch
 
@@ -124,6 +135,7 @@ class Index:
             return 0
         for c, v in zip(todo, vecs):
             c.embedding = v
+            self._vectors[c.text] = v
         return len(todo)
 
     # ------------------------------------------------------------- retrieval

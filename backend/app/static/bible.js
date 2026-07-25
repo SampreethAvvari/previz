@@ -246,6 +246,100 @@
       <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
   }
 
+  /* ------------------------------------------------------------ the Style Card */
+
+  /* Asked once, reused verbatim, recompiled only when the filmmaker changes it.
+   * The same mechanism as the Identity and Voice Cards, for the same reason: a
+   * look re-described before every image is a different look by shot 20.
+   *
+   * The unanswered count is shown deliberately. The pack never drops this slot,
+   * so a blank axis is not a gap in a form, it is a decision the model will make
+   * on its own and make differently every time.
+   */
+  let styleState = null;
+
+  async function drawStyle() {
+    const box = q("#stAxes");
+    if (!box) return;
+    try {
+      styleState = await get("/bible/style");
+    } catch {
+      box.innerHTML = `<div class="empty">Could not read the style card.</div>`;
+      return;
+    }
+    box.innerHTML = styleState.axes.map((a) => `
+      <div class="st-ax">
+        <label class="lab" for="st-${clean(a.key)}">${clean(a.question)}</label>
+        <input class="f" id="st-${clean(a.key)}" data-k="${clean(a.key)}"
+               value="${clean(a.value)}" placeholder="${clean(a.hint)}">
+        <div class="tiny faint">${clean(a.why)}</div>
+      </div>`).join("");
+
+    const look = q("#stLook");
+    if (look) look.value = styleState.look || "";
+    stStatus();
+  }
+
+  function stStatus(msg) {
+    const el = q("#stStatus");
+    if (!el || !styleState) return;
+    const answered = qa("#stAxes input").filter((i) => i.value.trim()).length;
+    const missing = styleState.total - answered;
+    el.innerHTML = msg ? `<span class="ok-note">${clean(msg)}</span>`
+      : missing
+        ? `<span class="warn-note">${answered} of ${styleState.total} axes
+             answered. The pack never drops this slot, so each blank one is a
+             decision the model makes on its own, differently every time.</span>`
+        : `<span class="ok-note">All ${styleState.total} axes answered. This card
+             is pasted verbatim into every image and every line.</span>`;
+  }
+
+  async function saveStyle() {
+    const btn = q("#stSave");
+    const axes = {};
+    qa("#stAxes input").forEach((i) => { axes[i.dataset.k] = i.value; });
+    if (btn) { btn.disabled = true; btn.textContent = "saving"; }
+    try {
+      styleState = await (await fetch("/api/bible/style", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ axes, look: q("#stLook")?.value || "" }),
+      })).json();
+      stStatus("Saved and reindexed. Every axis is a chunk in the bible now.");
+      assemble();                       // the style slot just changed
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Save style card"; }
+    }
+  }
+
+  /* Describe the film in one sentence, get the axes filled in. Suggestions only:
+   * they land in the fields for the filmmaker to edit, and nothing is written
+   * until Save. Inference does not become canon on its own (§5.1). */
+  async function suggestStyle() {
+    const btn = q("#stCompile");
+    const description = q("#stAsk")?.value.trim();
+    if (!description) return;
+    if (btn) { btn.disabled = true; btn.textContent = "reading"; }
+    try {
+      const r = await (await fetch("/api/bible/style/compile", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      })).json();
+      if (!r.ok) {
+        stStatus(`Could not reach the model, so fill the axes by hand. ${r.reason || ""}`);
+        return;
+      }
+      qa("#stAxes input").forEach((i) => {
+        const v = r.axes[i.dataset.k];
+        if (v) i.value = v;
+      });
+      const look = q("#stLook");
+      if (look && !look.value.trim()) look.value = description;
+      stStatus("Suggested from what you wrote. Edit anything, then save. Nothing is stored yet.");
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Suggest axes"; }
+    }
+  }
+
   /* ---------------------------------------------------- the knowledge horizon */
 
   /* Drag the scene number and watch what a character knows change. That is the
@@ -455,6 +549,11 @@
     drawLocations();
     fillScenes();
     castChips();
+    drawStyle();
+
+    q("#stSave")?.addEventListener("click", saveStyle);
+    q("#stCompile")?.addEventListener("click", suggestStyle);
+    q("#stAxes")?.addEventListener("input", () => stStatus());
 
     const maxScene = Math.max(1, ...(story.scene_index || []).map((s) => s.number));
     const slider = q("#hzScene");

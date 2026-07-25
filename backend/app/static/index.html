@@ -93,6 +93,28 @@
           <div id="spine" class="tiny muted"></div>
         </div>
       </div>
+      <!-- The Style Card. Asked once, pasted verbatim into every image and every
+           line, and never dropped from the pack. -->
+      <div class="panel pad" style="margin-bottom:20px">
+        <div class="eyebrow">Style card · how the film looks and feels</div>
+        <div class="st-ask">
+          <div style="flex:1">
+            <label class="lab">Describe the film in your own words</label>
+            <input class="f" id="stAsk"
+              placeholder="a wet night shift, nobody sleeping, everything lit by the machines">
+          </div>
+          <button class="act" id="stCompile">Suggest axes</button>
+        </div>
+        <div class="st-grid" id="stAxes"></div>
+        <label class="lab" style="margin-top:12px">Anything else about the look</label>
+        <textarea class="f" id="stLook" rows="2"
+          placeholder="the things that do not fit an axis"></textarea>
+        <div class="st-foot">
+          <button class="act primary" id="stSave">Save style card</button>
+          <div class="tiny" id="stStatus"></div>
+        </div>
+      </div>
+
       <!-- The Context Inspector. Every generated line in this product comes out
            of one assembled Continuity Pack, so this is where a wrong line gets
            traced to the fact behind it rather than argued about. -->
