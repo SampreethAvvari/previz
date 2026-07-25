@@ -25,8 +25,11 @@ gcloud config set project "$PROJECT" >/dev/null
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com >/dev/null
 
+# Context is the repo root, not backend/, because the app reads
+# data/seed/character_questions.json. Building from backend/ produces an image that
+# boots, serves the UI, and 404s every /api route.
 gcloud run deploy "$SERVICE" \
-  --source "$ROOT/backend" \
+  --source "$ROOT" \
   --region "$REGION" \
   --allow-unauthenticated \
   --min-instances 1 \
@@ -40,15 +43,15 @@ URL="$(gcloud run services describe "$SERVICE" --region "$REGION" \
         --format='value(status.url)')"
 echo
 echo "  $URL"
-echo "  health · $URL/healthz"
+echo "  health · $URL/api/health"
 echo
 
 # Smoke test the revision rather than trusting that the deploy printed a URL. A
 # service that deployed and does not answer is the failure worth catching here,
 # not on stage.
-if curl -fsS --max-time 30 "$URL/healthz" >/dev/null; then
-  echo "  healthz answered"
+if curl -fsS --max-time 30 "$URL/api/health" >/dev/null; then
+  echo "  health answered"
 else
-  echo "  WARNING: healthz did not answer. Check: gcloud run services logs read $SERVICE --region $REGION"
+  echo "  WARNING: health did not answer. Check: gcloud run services logs read $SERVICE --region $REGION"
   exit 1
 fi

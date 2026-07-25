@@ -548,12 +548,15 @@ async function loadCanon() {
 
 /* --------------------------------------------------------------------- health */
 
+/* /api/health rather than /healthz: Cloud Run's frontend intercepts /healthz and
+ * returns its own 404 without the request ever reaching the container. Anything
+ * under /api is untouched. */
 async function health() {
   try {
-    const h = await (await fetch("/healthz")).json();
+    const h = await api("/health");
     $("#healthname").textContent = h.ok
       ? `${h.chunks} chunks · ${h.chunks_embedded} embedded · ${h.maps_key ? "maps on" : "no maps key"}`
-      : `degraded · ${h.api_error || h.seed_error}`;
+      : "degraded";
     $("#health").style.color = h.ok ? "var(--ok)" : "var(--bad)";
   } catch { $("#healthname").textContent = "backend unreachable"; }
 }

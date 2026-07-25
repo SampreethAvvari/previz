@@ -22,6 +22,32 @@ def _sid(story_id: str | None) -> str:
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.get("/health")
+def health():
+    """Health, under /api because /healthz does not survive Cloud Run.
+
+    Measured, not guessed: /healthz is registered in the app and answers 200
+    locally, and on Cloud Run it returns Google's own 404 page while /healthz/
+    still 307s to it. The request never reaches the container and never appears in
+    the logs, so the frontend is intercepting that exact path. Anything under /api
+    is untouched, so health lives here and /healthz stays for local use.
+    """
+    from app.bible import index as _index
+    from app.config import settings
+
+    sid = store.default_story_id
+    chunks = _index.for_story(sid) if sid else []
+    return {"ok": True,
+            "project": settings.gcp_project,
+            "location": settings.gcp_location,
+            "story_id": sid,
+            "stories": len(store.stories),
+            "chunks": len(chunks),
+            "chunks_embedded": sum(1 for c in chunks
+                                   if c.embedding is not None),
+            "maps_key": bool(settings.google_maps_api_key)}
+
+
 @router.get("/story")
 def get_story(story_id: str | None = None):
     """The whole bible in one call. The client caches this and re-fetches after
