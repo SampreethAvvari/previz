@@ -6,11 +6,20 @@ from app.config import settings
 def get_client() -> genai.Client:
     return genai.Client(api_key=settings.gemini_api_key)
 
+IMAGE_MODEL = "gemini-2.5-flash-image"
+TEXT_MODEL = "gemini-flash-latest"
+
 def generate_image(prompt: str, aspect_ratio: str = "16:9") -> bytes:
+    """Generate one image from a text prompt via Gemini's native image model.
+
+    Uses generate_content (the Imagen `predict` models are not available to new
+    API keys) and returns the raw image bytes from the first inline_data part.
+    """
     client = get_client()
-    resp = client.models.generate_images(
-        model="imagen-3.0-generate-002",
-        prompt=prompt,
-        config={"number_of_images": 1, "aspect_ratio": aspect_ratio},
-    )
-    return resp.generated_images[0].image.image_bytes
+    full_prompt = f"{prompt}. Cinematic {aspect_ratio} widescreen framing."
+    resp = client.models.generate_content(model=IMAGE_MODEL, contents=full_prompt)
+    for part in resp.candidates[0].content.parts:
+        inline = getattr(part, "inline_data", None)
+        if inline and inline.data:
+            return inline.data
+    raise RuntimeError("model returned no image")

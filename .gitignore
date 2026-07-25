@@ -32,6 +32,7 @@ Thumbs.db
 
 # Local demo cache / generated artifacts
 /backend/.cache/
+/backend/out/
 /frontend/public/generated/
 
 # Subagent-driven-development scratch workspace
