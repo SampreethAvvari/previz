@@ -24,6 +24,22 @@ Why: the whole point is watching localhost change. A long branch means nobody se
 your work, nobody can build on it, and the merge lands as one painful lump at the
 worst possible time.
 
+## No test driven development. Build first, verify minimally.
+
+Speed is the constraint. **Do not write tests before code. Do not write test
+suites.**
+
+- Write the feature. Run it once. Confirm the app still boots. Push.
+- Verification means a single smoke check: does the endpoint return 200, does the
+  page render, does the function return the right shape. One command, not a suite.
+- Existing tests should keep passing, but do not add to them and do not chase
+  coverage.
+- The real verification is localhost. Click the thing. If it works, it works.
+
+Do not spend time on: fixtures, mocks, parametrised cases, edge case tests,
+calibration harnesses. If something is broken you will see it on screen faster
+than a test would tell you.
+
 ## Never break the boot
 
 The app must start even when your part is unfinished. Return a stub, return
