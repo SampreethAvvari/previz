@@ -1,222 +1,232 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Previs — AI Storyboards</title>
-<style>
-  :root {
-    --bg: #0b0d10; --panel: #14171c; --panel2: #191d23; --border: #262b33;
-    --text: #e7e9ec; --muted: #9aa3af; --accent: #e0a066; --accent-press: #cf8a4e;
-    --radius: 12px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-  header {
-    padding: 22px 28px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: baseline; gap: 14px;
-  }
-  header h1 { margin: 0; font-size: 20px; letter-spacing: .5px; font-weight: 650; }
-  header .tag { color: var(--muted); font-size: 13px; }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
-
-  .card {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px;
-  }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; text-transform: uppercase; letter-spacing: .5px; }
-  textarea, select {
-    width: 100%; background: var(--panel2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
-    font: inherit; outline: none;
-  }
-  textarea { min-height: 92px; resize: vertical; }
-  textarea:focus, select:focus { border-color: var(--accent); }
-  .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
-  .row { display: flex; gap: 12px; align-items: flex-end; margin-top: 16px; flex-wrap: wrap; }
-  button {
-    background: var(--accent); color: #1a1204; border: none; border-radius: 8px;
-    padding: 11px 22px; font: inherit; font-weight: 650; cursor: pointer;
-  }
-  button:hover { background: var(--accent-press); }
-  button:disabled { opacity: .55; cursor: default; }
-  .status { color: var(--muted); font-size: 14px; min-height: 20px; }
-
-  section h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: 34px 0 14px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-  .shot { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .shot img { width: 100%; display: block; aspect-ratio: 16/10; object-fit: cover; background: #000; }
-  .shot .meta { padding: 12px 14px; }
-  .shot .num { color: var(--accent); font-size: 12px; font-weight: 650; letter-spacing: .5px; }
-  .shot .desc { font-size: 13.5px; color: var(--text); margin-top: 4px; }
-
-  .loc { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-  .loc .name { font-weight: 600; }
-  .loc .addr { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
-  .loc a { color: var(--accent); font-size: 13px; text-decoration: none; }
-  .loc a:hover { text-decoration: underline; }
-
-  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
-    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 8px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .hidden { display: none; }
-  .error { color: #e06a5a; }
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Magic Hour</title>
+<link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<header>
-  <h1>PREVIS</h1>
-  <span class="tag">Type a scene → get a storyboard + real filming locations.</span>
-</header>
 
-<main>
-  <div class="card">
-    <label for="scene">Scene</label>
-    <textarea id="scene">INT. NOIR BAR - NIGHT. A lone detective nurses a whiskey as rain streaks the window. The door opens; a woman in a red dress steps into the smoky light.</textarea>
+<div id="field"></div>
+<canvas id="stars"></canvas>
 
-    <div class="controls">
-      <div>
-        <label>Genre</label>
-        <select id="genre">
-          <option>noir</option><option>thriller</option><option>drama</option>
-          <option>sci-fi</option><option>horror</option><option>western</option>
-          <option>romance</option><option>action</option><option>fantasy</option>
-        </select>
+<div id="shell">
+
+  <!-- the rail. Six surfaces, one story bible. -->
+  <nav id="rail">
+    <div class="mark">M</div>
+    <button class="tab on" data-s="bible" style="--tint:var(--bible)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5.5A2 2 0 016 3.5h12v17H6a2 2 0 01-2-2z"/><path d="M8 7.5h7M8 11h7"/></svg>
+      <span class="name">Bible · the knowledge layer</span>
+    </button>
+    <button class="tab" data-s="script" style="--tint:var(--script)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 3.5h9l5 5v12H5z"/><path d="M14 3.5v5h5M8 13h8M8 16.5h5"/></svg>
+      <span class="name">Script · the screenplay</span>
+    </button>
+    <button class="tab" data-s="board" style="--tint:var(--board)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5.5" width="18" height="13" rx="1.6"/><path d="M3 9.5h18M8 5.5v4M16 5.5v4"/></svg>
+      <span class="name">Board · storyboards</span>
+    </button>
+    <button class="tab" data-s="cast" style="--tint:var(--cast)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20.5c0-3.9 3.1-6.4 7-6.4s7 2.5 7 6.4"/></svg>
+      <span class="name">Cast · the 100 questions</span>
+    </button>
+    <button class="tab" data-s="scout" style="--tint:var(--scout)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21.5s7-6.3 7-11.4A7 7 0 005 10.1c0 5.1 7 11.4 7 11.4z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <span class="name">Scout · real locations</span>
+    </button>
+    <button class="tab" data-s="muse" style="--tint:var(--muse)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 11.5a8.4 8.4 0 01-9 8.4 9.6 9.6 0 01-2.7-.4L4 21l1.4-4.1A8.1 8.1 0 013 11.5a8.4 8.4 0 019-8.4 8.4 8.4 0 019 8.4z"/></svg>
+      <span class="name">Muse · talk it through</span>
+    </button>
+    <div class="spacer"></div>
+    <button class="tab" id="health">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></svg>
+      <span class="name" id="healthname">checking</span>
+    </button>
+  </nav>
+
+  <main id="work">
+    <header class="bar">
+      <h1 id="title">Magic Hour</h1>
+      <span class="sub" id="logline">loading the bible</span>
+      <span class="right">
+        <span class="chip mono" id="budget">· / ·</span>
+        <span class="chip mono" id="chunks">· chunks</span>
+      </span>
+    </header>
+
+    <!-- Bible ------------------------------------------------------------- -->
+    <section class="surface on" data-s="bible">
+      <div class="grid two" style="margin-bottom:14px">
+        <div class="panel lit pad">
+          <div class="eyebrow">Search the bible</div>
+          <input class="f" id="q" placeholder="what does Maya know about the night route">
+          <div class="tiny faint" style="margin-top:8px">
+            Hybrid: cosine over the chunks and token overlap, fused by reciprocal
+            rank. Canon outranks draft at equal relevance. Results land in the
+            Context tab.
+          </div>
+        </div>
+        <div class="panel pad">
+          <div class="eyebrow">The story</div>
+          <div id="spine" class="tiny muted"></div>
+        </div>
       </div>
-      <div>
-        <label>Visual style</label>
-        <select id="visual_style">
-          <option>black and white film grain</option>
-          <option>photorealistic cinematic</option>
-          <option>vintage technicolor</option>
-          <option>graphic novel ink</option>
-          <option>anime</option>
-          <option>watercolor</option>
-          <option>cyberpunk neon</option>
-        </select>
+      <div class="eyebrow">Scenes</div>
+      <div class="grid cards" id="sceneCards" style="margin-bottom:20px"></div>
+      <div class="eyebrow">Characters</div>
+      <div class="grid cards" id="charCards"></div>
+    </section>
+
+    <!-- Script ------------------------------------------------------------ -->
+    <section class="surface" data-s="script">
+      <div class="panel pad" style="margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div style="width:210px">
+            <label class="lab">Scene</label>
+            <select class="f" id="scScene"></select>
+          </div>
+          <div style="flex:1">
+            <label class="lab">What this beat has to do · optional</label>
+            <input class="f" id="scIntent" placeholder="he still does not understand what he has lost">
+          </div>
+          <button class="act" id="btnAction">Write action</button>
+          <button class="act primary" id="btnDialogue">Write dialogue</button>
+          <button class="act" id="btnSupervise">Supervise</button>
+        </div>
+        <div class="tiny faint" style="margin-top:9px">
+          One sub-agent per character, each built from its own Voice Card verbatim
+          and bounded by what that character knows as of this scene. Every line is
+          scored against their voice fingerprint.
+        </div>
       </div>
-      <div>
-        <label>Mood</label>
-        <select id="mood">
-          <option>tense</option><option>dreamy</option><option>ominous</option>
-          <option>melancholic</option><option>epic</option><option>intimate</option><option>joyful</option>
-        </select>
+      <div class="grid" style="grid-template-columns:1fr 300px">
+        <div>
+          <div class="eyebrow">Screenplay</div>
+          <div class="script" id="pages"></div>
+        </div>
+        <div>
+          <div class="eyebrow">Lines and their scores</div>
+          <div id="lines"></div>
+        </div>
       </div>
-      <div>
-        <label>Era</label>
-        <select id="era">
-          <option>1940s</option><option>1970s</option><option>present day</option>
-          <option>near future</option><option>victorian</option><option>medieval</option>
-        </select>
+    </section>
+
+    <!-- Board ------------------------------------------------------------- -->
+    <section class="surface" data-s="board">
+      <div class="panel pad" style="margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div style="width:210px">
+            <label class="lab">Scene</label>
+            <select class="f" id="bdScene"></select>
+          </div>
+          <div style="width:110px">
+            <label class="lab">Shots</label>
+            <input class="f" id="bdCount" type="number" value="6" min="1" max="12">
+          </div>
+          <div style="width:150px">
+            <label class="lab">Style</label>
+            <select class="f" id="bdStyle">
+              <option value="realistic">realistic</option>
+              <option value="animation">animation</option>
+              <option value="pencil">pencil</option>
+            </select>
+          </div>
+          <button class="act" id="btnPlan">Plan shots</button>
+          <button class="act primary" id="btnRender">Render board</button>
+        </div>
+        <div class="tiny faint" style="margin-top:9px">
+          All the deciding happens in text before any image is paid for. Each
+          frame is conditioned on the locked reference sheet and the Identity Card
+          verbatim, then scored against the face fingerprint.
+        </div>
       </div>
-      <div>
-        <label>Palette</label>
-        <select id="color_palette">
-          <option>high-contrast monochrome</option><option>natural</option>
-          <option>warm amber</option><option>cool teal</option>
-          <option>desaturated</option><option>vibrant</option>
-        </select>
+      <div class="grid frames" id="board"></div>
+    </section>
+
+    <!-- Cast -------------------------------------------------------------- -->
+    <section class="surface" data-s="cast">
+      <div class="grid" style="grid-template-columns:290px 1fr">
+        <div>
+          <div class="eyebrow">Characters</div>
+          <div id="castList"></div>
+          <div class="panel pad" style="margin-top:12px">
+            <label class="lab">Add a character</label>
+            <input class="f" id="newName" placeholder="name">
+            <button class="act" id="btnAddChar" style="margin-top:8px;width:100%">Create</button>
+          </div>
+        </div>
+        <div>
+          <div class="eyebrow" id="castWho">Select a character</div>
+          <div id="castDetail"></div>
+        </div>
       </div>
-      <div>
-        <label>Aspect</label>
-        <select id="aspect_ratio">
-          <option>16:9</option><option>2.39:1</option><option>4:3</option><option>1:1</option><option>9:16</option>
-        </select>
+    </section>
+
+    <!-- Scout ------------------------------------------------------------- -->
+    <section class="surface" data-s="scout">
+      <div class="panel pad" style="margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div style="flex:1">
+            <label class="lab">What the scene needs</label>
+            <input class="f" id="scoutNeed" placeholder="a working bus depot with a yard you can shoot at night">
+          </div>
+          <div style="width:180px">
+            <label class="lab">Region</label>
+            <input class="f" id="scoutRegion" value="New York, NY">
+          </div>
+          <div style="width:120px">
+            <label class="lab">Attach to</label>
+            <select class="f" id="scoutScene"></select>
+          </div>
+          <button class="act primary" id="btnScout">Scout</button>
+        </div>
       </div>
+      <div class="grid cards" id="locs"></div>
+    </section>
+
+    <!-- Muse -------------------------------------------------------------- -->
+    <section class="surface" data-s="muse">
+      <div class="empty">
+        Muse is not wired yet. The transport seam is specified: one
+        <span class="mono">POST /api/muse/turn</span> taking <span class="mono">{text}</span>
+        and returning the same SSE envelope every other surface uses, so adding it
+        touches no agent, tool or context code.
+      </div>
+    </section>
+  </main>
+
+  <!-- the inspector ----------------------------------------------------- -->
+  <aside id="inspector">
+    <div id="itabs">
+      <button class="on" data-i="ctx">Context</button>
+      <button data-i="trace">Trace</button>
+      <button data-i="canon">Canon</button>
     </div>
-
-    <div class="row">
-      <button id="go">Generate storyboard</button>
-      <span class="status" id="status"></span>
+    <div class="ipane on" data-i="ctx">
+      <div class="eyebrow">Continuity Pack</div>
+      <div id="slots" class="faint tiny">Run anything and the exact context it received appears here.</div>
+      <div class="eyebrow" style="margin-top:18px">Retrieved</div>
+      <div id="hits" class="faint tiny">No search yet.</div>
     </div>
-  </div>
+    <div class="ipane" data-i="trace">
+      <div class="eyebrow">Live agent trace</div>
+      <div id="trace" class="faint tiny">Idle.</div>
+    </div>
+    <div class="ipane" data-i="canon">
+      <div class="eyebrow">Pending proposals</div>
+      <div class="tiny faint" style="margin-bottom:10px">
+        Agents cannot write canon. They propose, with the reasoning that produced
+        it, and a person promotes.
+      </div>
+      <div id="canon"></div>
+    </div>
+  </aside>
 
-  <section id="shotsSection" class="hidden">
-    <h2>Storyboard</h2>
-    <div class="grid" id="shots"></div>
-  </section>
+</div>
 
-  <section id="locSection" class="hidden">
-    <h2>Filming locations</h2>
-    <div class="grid" id="locs"></div>
-  </section>
-</main>
-
-<script>
-  const $ = (id) => document.getElementById(id);
-  const btn = $("go"), status = $("status");
-
-  function style() {
-    return {
-      genre: $("genre").value,
-      visual_style: $("visual_style").value,
-      mood: $("mood").value,
-      era: $("era").value,
-      color_palette: $("color_palette").value,
-      aspect_ratio: $("aspect_ratio").value,
-    };
-  }
-
-  async function generate() {
-    const scene = $("scene").value.trim();
-    if (!scene) { status.textContent = "Enter a scene first."; return; }
-
-    btn.disabled = true;
-    status.className = "status";
-    status.innerHTML = '<span class="spinner"></span>Directing… planning shots and rendering frames (~15–25s)';
-    $("shotsSection").classList.add("hidden");
-    $("locSection").classList.add("hidden");
-    $("shots").innerHTML = ""; $("locs").innerHTML = "";
-
-    try {
-      const res = await fetch("/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scene, style: style() }),
-      });
-      if (!res.ok) throw new Error("Server error " + res.status);
-      const data = await res.json();
-
-      for (const s of data.shots) {
-        const el = document.createElement("div");
-        el.className = "shot";
-        el.innerHTML =
-          `<img src="${s.image_data_url}" alt="shot ${s.index + 1}" />
-           <div class="meta"><div class="num">SHOT ${s.index + 1}</div>
-           <div class="desc"></div></div>`;
-        el.querySelector(".desc").textContent = s.description;
-        $("shots").appendChild(el);
-      }
-      $("shotsSection").classList.remove("hidden");
-
-      if (data.locations && data.locations.length) {
-        for (const l of data.locations) {
-          const el = document.createElement("div");
-          el.className = "loc";
-          el.innerHTML =
-            `<div class="name"></div><div class="addr"></div>
-             <a href="${l.maps_url}" target="_blank" rel="noopener">Open in Google Maps →</a>`;
-          el.querySelector(".name").textContent = l.name;
-          el.querySelector(".addr").textContent = l.address;
-          $("locs").appendChild(el);
-        }
-        $("locSection").classList.remove("hidden");
-      }
-
-      status.textContent = `Done — ${data.shots.length} frames` +
-        (data.locations.length ? `, ${data.locations.length} locations.` : ".");
-    } catch (e) {
-      status.className = "status error";
-      status.textContent = "Failed: " + e.message;
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  btn.addEventListener("click", generate);
-</script>
+<script src="/static/app.js"></script>
 </body>
 </html>

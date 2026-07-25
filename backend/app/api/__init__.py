@@ -16,10 +16,11 @@ is true.
 from fastapi import APIRouter
 
 from app.api import bible as bible_routes
-from app.api import board, cast, script, scout
+from app.api import board, cast, knowledge, script, scout
 
 api = APIRouter(prefix="/api")
 api.include_router(bible_routes.router, tags=["bible"])
+api.include_router(knowledge.router, tags=["knowledge"])
 api.include_router(cast.router, tags=["cast"])
 api.include_router(board.router, tags=["board"])
 api.include_router(script.router, tags=["script"])

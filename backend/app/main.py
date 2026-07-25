@@ -76,6 +76,11 @@ except Exception as exc:  # noqa: BLE001
 if CACHE.is_dir():
     app.mount("/cache", StaticFiles(directory=CACHE), name="cache")
 
+# app.css and app.js. Kept as separate files rather than inlined into index.html
+# so each stays under the 300 line rule and so a style change is not a diff
+# against the markup.
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
 
 @app.get("/healthz")
 def healthz() -> dict:
