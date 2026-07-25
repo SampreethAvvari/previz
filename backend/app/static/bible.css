@@ -140,6 +140,42 @@
 .ck .cid:hover { color: var(--ink); border-color: var(--line-bright); }
 .ck .t { color: var(--ink-dim); font-size: 12.5px; line-height: 1.5; }
 
+/* ------------------------------------------------------ the knowledge horizon */
+
+.hz-bar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.hz-scene { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 240px; }
+.hz-scene input[type=range] {
+  flex: 1; accent-color: var(--accent); height: 3px; cursor: pointer;
+}
+
+.hz-f {
+  border-left: 2px solid color-mix(in srgb, var(--ok) 42%, transparent);
+  padding: 7px 0 8px 10px;
+  margin-bottom: 7px;
+}
+.hz-f .t { font-size: 12.5px; line-height: 1.5; color: var(--ink-dim); }
+/* Inferred rather than told. Dotted, because it is real knowledge the character
+ * can act on and is still one step removed from anything anybody said to them. */
+.hz-f.inf { border-left-style: dotted; border-left-color: color-mix(in srgb, var(--muse) 62%, transparent); }
+/* What is being kept from them. This is the list a writer works from. */
+.hz-f.gap { border-left-color: color-mix(in srgb, var(--bad) 55%, transparent); border-left-style: dashed; }
+.hz-f.gap .t { color: color-mix(in srgb, var(--bad) 24%, var(--ink-dim)); }
+
+.hz-check { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+.hz-ok, .hz-bad {
+  margin-top: 10px; padding: 10px 12px; border-radius: 9px; font-size: 12.5px; line-height: 1.5;
+}
+.hz-ok {
+  border: 1px solid color-mix(in srgb, var(--ok) 34%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+  color: color-mix(in srgb, var(--ok) 60%, var(--ink));
+}
+.hz-bad {
+  border: 1px solid color-mix(in srgb, var(--bad) 42%, transparent);
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+  color: #FFC9CE;
+}
+
 /* ----------------------------------------------------------- the source drawer */
 
 #srcDrawer {

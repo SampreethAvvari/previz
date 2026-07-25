@@ -124,6 +124,32 @@
         <div id="ciOut"></div>
       </div>
 
+      <!-- The knowledge horizon. Drag the scene and watch the boundary move. -->
+      <div class="panel pad" style="margin-bottom:20px">
+        <div class="eyebrow">Knowledge horizon · what a character knows, and when</div>
+        <div class="hz-bar">
+          <div class="ci-cast" id="hzCast" style="margin-top:0"></div>
+          <div class="hz-scene">
+            <input type="range" id="hzScene" min="1" max="3" value="1" step="1">
+            <span class="tiny faint mono" id="hzSceneLabel"></span>
+          </div>
+        </div>
+        <div class="grid two" id="hzOut" style="margin-top:14px"></div>
+        <div class="hz-check">
+          <label class="lab">Could they have said this yet</label>
+          <input class="f" id="hzLine"
+            placeholder="So the night route is being cut at the end of the month, then.">
+          <div id="hzVerdict"></div>
+          <div class="tiny faint" style="margin-top:8px">
+            The same check the supervisor runs after every write. A fact held by
+            someone else, absent from this character's horizon, whose rare words
+            turn up in the line, is a violation. Common story words are treated as
+            background, so a clean verdict means the line refers to nothing
+            withheld.
+          </div>
+        </div>
+      </div>
+
       <div class="eyebrow">Scenes</div>
       <div class="grid cards" id="sceneCards" style="margin-bottom:20px"></div>
       <div class="eyebrow">Characters</div>

@@ -246,6 +246,116 @@
       <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
   }
 
+  /* ---------------------------------------------------- the knowledge horizon */
+
+  /* Drag the scene number and watch what a character knows change. That is the
+   * whole idea of §6.4 made visible: a character who refers to something they
+   * have not learned breaks a scene more completely than a wrong adjective, and
+   * the only way to see the boundary is to see it move.
+   */
+  let hzWho = null;
+
+  function hzChips() {
+    const box = q("#hzCast");
+    if (!box) return;
+    const cast = story.characters || [];
+    if (!hzWho && cast.length) hzWho = cast[0].id;
+    box.innerHTML = cast.map((c) =>
+      `<button data-id="${clean(c.id)}" class="${c.id === hzWho ? "on" : ""}">${clean(c.name)}</button>`
+    ).join("");
+    qa("button", box).forEach((b) => b.onclick = () => {
+      hzWho = b.dataset.id;
+      hzChips();
+      drawHorizon();
+    });
+  }
+
+  async function drawHorizon() {
+    const out = q("#hzOut");
+    if (!out || !hzWho) return;
+    const scene = +(q("#hzScene")?.value || 1);
+    const label = q("#hzSceneLabel");
+    const sc = (story.scene_index || []).find((s) => s.number === scene);
+    if (label) label.textContent = sc ? `scene ${scene} · ${sc.slugline}` : `scene ${scene}`;
+
+    let h, iron;
+    try {
+      [h, iron] = await Promise.all([
+        get(`/knowledge/horizon?character=${encodeURIComponent(hzWho)}&scene=${scene}`),
+        get(`/knowledge/irony?scene=${scene}`),
+      ]);
+    } catch (err) {
+      out.innerHTML = `<div class="empty">${clean(err.message)}</div>`;
+      return;
+    }
+
+    const fact = (f) => `
+      <div class="hz-f ${f.depth ? "inf" : ""}">
+        <div class="t">${clean(f.fact)}</div>
+        <div class="tiny faint">${f.depth
+          ? `inferred · ${clean(f.via)}`
+          : `told · since scene ${Number(f.since_scene) || 1}`}</div>
+      </div>`;
+
+    // Who is in the dark about what this character knows, and the reverse. Both
+    // directions matter: the first is what they can use, the second is what they
+    // must not mention.
+    const blind = iron.gaps.filter((g) => (g.unknown_to || []).includes(h.character));
+
+    out.innerHTML = `
+      <div>
+        <div class="eyebrow">${clean(h.character)} knows · ${h.count}</div>
+        ${h.told.length ? h.told.map(fact).join("")
+          : `<div class="empty">Nothing yet at this scene.</div>`}
+        ${h.inferred.length ? `
+          <div class="eyebrow" style="margin-top:14px">And can reason to</div>
+          ${h.inferred.map(fact).join("")}` : ""}
+      </div>
+      <div>
+        <div class="eyebrow">Does not know · ${blind.length}</div>
+        ${blind.length ? blind.map((g) => `
+          <div class="hz-f gap">
+            <div class="t">${clean(g.fact)}</div>
+            <div class="tiny faint">known to ${clean((g.known_by || []).join(", "))}</div>
+          </div>`).join("")
+          : `<div class="empty">Nothing is being kept from them at this scene.</div>`}
+      </div>`;
+    checkLine();
+  }
+
+  /* Type a line and find out whether this character could have said it yet. The
+   * check is lexical and deliberately quiet, so a clean verdict means the line
+   * refers to nothing withheld rather than that nothing was looked at. */
+  async function checkLine() {
+    const box = q("#hzVerdict");
+    const text = q("#hzLine")?.value.trim();
+    if (!box) return;
+    if (!text || !hzWho) { box.innerHTML = ""; return; }
+    const scene = +(q("#hzScene")?.value || 1);
+    let v;
+    try {
+      const r = await fetch("/api/knowledge/check", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ character: hzWho, scene, text }),
+      });
+      v = await r.json();
+    } catch { return; }
+
+    box.innerHTML = v.ok
+      ? `<div class="hz-ok">Clean. Nothing in this line is outside what
+           ${clean(v.character)} knows by scene ${scene}.</div>`
+      : `<div class="hz-bad">
+           <b>${v.violations.length} knowledge violation${v.violations.length > 1 ? "s" : ""}.</b>
+           ${v.violations.map((h) => `
+             <div style="margin-top:7px">
+               ${clean(h.fact)}
+               <div class="tiny faint">held by ${clean(h.held_by)} · ${clean(v.character)}
+                 does not learn it until scene ${Number(h.learns_in_scene) || 1}
+                 · matched on ${clean((h.matched || []).join(", "))}</div>
+             </div>`).join("")}
+         </div>`;
+  }
+
   /* -------------------------------------------------------- the Canon strip */
 
   /* The shell already draws a strip with the agent and its reasoning. This
@@ -346,6 +456,19 @@
     fillScenes();
     castChips();
 
+    const maxScene = Math.max(1, ...(story.scene_index || []).map((s) => s.number));
+    const slider = q("#hzScene");
+    if (slider) {
+      slider.max = String(maxScene);
+      slider.oninput = drawHorizon;
+    }
+    hzChips();
+    drawHorizon();
+    let lt;
+    q("#hzLine")?.addEventListener("input", () => {
+      clearTimeout(lt); lt = setTimeout(checkLine, 300);
+    });
+
     const run = q("#ciRun");
     if (run) run.onclick = assemble;
     const ex = q("#ciExtract");
@@ -377,8 +500,10 @@
     if (r.ok && method !== "GET" && url.includes("/api/") &&
         !url.includes("/bible/context")) {
       setTimeout(async () => {
-        try { story = await get("/story"); drawLocations(); castChips(); assemble(); }
-        catch { /* the shell already surfaces a failure */ }
+        try {
+          story = await get("/story");
+          drawLocations(); castChips(); assemble(); drawHorizon();
+        } catch { /* the shell already surfaces a failure */ }
       }, 60);
     }
     return r;
