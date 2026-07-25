@@ -49,12 +49,12 @@ window.Builder = {
     // which is almost always already answered and teaches nothing.
     const q = bqueue();
     if (!Object.keys(DIRTY).length) BI = Math.max(0, q.findIndex((x) => !bval(x)));
-    Builder.draw();
+    bdDraw();
   },
-  draw,
+  draw: bdDraw,
 };
 
-function draw() {
+function bdDraw() {
   const p = IV.progress;
   const ch = IV.character;
   const unsaved = Object.keys(DIRTY).length;
@@ -72,7 +72,7 @@ function draw() {
         <button class="act ${unsaved ? "primary" : ""}" id="bdSaveAll"
           ${unsaved ? "" : "disabled"}>Save</button>
       </div>
-      ${gate()}
+      ${bdGate()}
       <div class="bd-parts">
         ${IV.parts.map((pt) => {
           const v = p.by_part[pt.key];
@@ -103,7 +103,7 @@ function draw() {
       <button class="${BMODE === "all" ? "on" : ""}" data-m="all">All 100</button>
     </div>
 
-    ${BMODE === "interview" ? interview() : allHundred()}
+    ${BMODE === "interview" ? bdInterview() : bdAll()}
 
     ${ch.identity_card ? cardPanel(
       "Identity Card · frozen, pasted verbatim into every image prompt", [
@@ -117,12 +117,12 @@ function draw() {
       ["never says", (ch.voice_card.never_says || []).join(" · ")],
       ["samples", (ch.voice_card.samples || []).map((s) => `"${s}"`).join("\n")],
       ...Object.entries(ch.voice_card.register || {})]) : ""}`;
-  wire();
+  bdWire();
 }
 
 /* The gate. Twelve dots, one per core question, because "5 of 12" tells you how
  * far you are and this tells you which ones are missing and lets you go there. */
-function gate() {
+function bdGate() {
   const core = bqueue().filter((q) => q.is_core);
   return `<div class="bd-gate">
     ${core.map((q) => {
@@ -138,7 +138,7 @@ function gate() {
   </div>`;
 }
 
-function interview() {
+function bdInterview() {
   const q = bqueue()[BI];
   if (!q) return `<div class="empty">All 100 answered.</div>`;
   const n = bqueue().filter((x) => bval(x).trim()).length;
@@ -162,7 +162,7 @@ function interview() {
     </div>`;
 }
 
-function allHundred() {
+function bdAll() {
   const pt = IV.parts.find((p) => p.key === BPART) || IV.parts[0];
   return `
     <div class="panel pad">
@@ -184,7 +184,7 @@ function allHundred() {
 
 /* ---------------------------------------------------------------- interaction */
 
-function wire() {
+function bdWire() {
   $$("#castDetail .ans").forEach((t) => {
     t.oninput = () => {
       const q = BQ[t.dataset.q];
@@ -203,48 +203,48 @@ function wire() {
     t.onkeydown = (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        BMODE === "interview" ? step(1, true) : save();
+        BMODE === "interview" ? bdStep(1, true) : bdSave();
       }
     };
   });
 
   $$("#castDetail .bd-part").forEach((b) => b.onclick = () => {
-    BPART = b.dataset.p; BMODE = "all"; draw();
+    BPART = b.dataset.p; BMODE = "all"; bdDraw();
   });
   $$("#castDetail .bd-modes button").forEach((b) => b.onclick = () => {
-    BMODE = b.dataset.m; draw();
+    BMODE = b.dataset.m; bdDraw();
   });
   $$("#castDetail .bd-dot").forEach((b) => b.onclick = () => {
     BMODE = "interview";
     BI = bqueue().findIndex((q) => q.id === +b.dataset.q);
-    draw();
+    bdDraw();
   });
 
   const nx = $("#bdNext");
   if (nx) {
-    nx.onclick = () => step(1, true);
-    $("#bdSkip").onclick = () => step(1, false);
-    $("#bdPrev").onclick = () => step(-1, false);
+    nx.onclick = () => bdStep(1, true);
+    $("#bdSkip").onclick = () => bdStep(1, false);
+    $("#bdPrev").onclick = () => bdStep(-1, false);
   }
-  $("#bdSaveAll").onclick = save;
-  $("#bdDraft").onclick = drafting;
-  $("#btnCompile").onclick = () => run("compile");
-  $("#btnCast").onclick = () => run("cast");
+  $("#bdSaveAll").onclick = bdSave;
+  $("#bdDraft").onclick = bdDrafting;
+  $("#btnCompile").onclick = () => bdRun("compile");
+  $("#btnCast").onclick = () => bdRun("cast");
 }
 
-async function step(d, saveFirst) {
-  if (saveFirst && Object.keys(DIRTY).length) { await save(); return; }
+async function bdStep(d, saveFirst) {
+  if (saveFirst && Object.keys(DIRTY).length) { await bdSave(); return; }
   BI = Math.min(bqueue().length - 1, Math.max(0, BI + d));
-  draw();
+  bdDraw();
   $("#castDetail .ans")?.focus();
 }
 
 /* One PUT for everything unsaved. The server merges, bumps canon_version once and
  * stales both cards once, which is the whole reason answers are batched. */
-async function save() {
+async function bdSave() {
   const answers = {};
   for (const [k, v] of Object.entries(DIRTY)) if (v.trim()) answers[k] = v.trim();
-  if (!Object.keys(answers).length) { DIRTY = {}; draw(); return; }
+  if (!Object.keys(answers).length) { DIRTY = {}; bdDraw(); return; }
   $("#bdSaveAll").disabled = true;
   await api(`/characters/${BCID}/answers`,
     { method: "PUT", body: JSON.stringify({ answers }) });
@@ -258,10 +258,10 @@ async function save() {
     const at = q.findIndex((x) => !bval(x));
     if (at >= 0) BI = at;
   }
-  draw();
+  bdDraw();
 }
 
-async function drafting() {
+async function bdDrafting() {
   const btn = $("#bdDraft");
   btn.disabled = true;
   IV.premise = $("#bdPremise").value.trim();
@@ -270,10 +270,10 @@ async function drafting() {
     { premise: IV.premise, part: BMODE === "all" ? BPART : null },
     { data: (e) => { DRAFTS = { ...DRAFTS, ...(e.drafts || {}) }; } });
   btn.disabled = false;
-  draw();
+  bdDraw();
 }
 
-async function run(what) {
+async function bdRun(what) {
   const btn = what === "compile" ? $("#btnCompile") : $("#btnCast");
   btn.disabled = true;
   $$("#itabs button")[1].click();
