@@ -17,7 +17,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app import screenplay
 from app.bible import build_pack, reindex_entity
+from app.screenplay import (action_block, dialogue_block, lines_json, parse,
+                            stats, to_text)
 from app.sse import stream
 from app.store import scene_json, store
 
@@ -262,3 +265,314 @@ def supervise(number: int, story_id: str | None = None):
         return {"findings": findings, "clean": not findings}
 
     return stream(work, agent="ScriptSupervisor")
+
+
+# ===================================================================== the canvas
+#
+# Everything below serves the screenplay editor. Two rules shape all of it.
+#
+# One: the editor stores typed elements, never styled text. `app/screenplay.py`
+# owns the element grammar and the margins, and it is served to the browser at
+# /screenplay/grammar rather than duplicated in JavaScript, so the page on screen
+# and the page on disk cannot disagree about what a character cue is.
+#
+# Two: the AI writes ONE element at a time. Not a scene, not a page. A writer
+# accepts or discards a single line and stays the author of the sequence, and an
+# agent that returns a whole scene is an agent whose output nobody reads closely
+# enough to catch a wrong one.
+
+
+@router.get("/screenplay/grammar")
+def screenplay_grammar():
+    """The element table, the margins, the Enter and Tab rules.
+
+    Fetched once by the editor on load. This is the single definition of screenplay
+    format in the product.
+    """
+    return screenplay.grammar()
+
+
+def _cast_of(st, sc) -> list[dict]:
+    """Who is in this scene, and whether their voice agent can actually run.
+
+    `ready` is the gate from §9.2: under 12 core answers we refuse to write a
+    character rather than invent one, so the panel shows the button disabled with
+    the count instead of failing after the click.
+    """
+    out = []
+    for cid in sc.characters:
+        c = st.characters.get(cid)
+        if not c:
+            continue
+        out.append({"id": c.id, "name": c.name, "role": c.role,
+                    "core_answered": c.core_answered,
+                    "has_voice_card": c.voice_card is not None,
+                    "canon_version": c.canon_version,
+                    "knows": c.knows_by(sc.number),
+                    "ready": c.core_answered >= 12})
+    return out
+
+
+@router.get("/scenes/{number}/screenplay")
+def get_screenplay(number: int, story_id: str | None = None):
+    """The scene as typed elements, with its page count and its cast."""
+    sid = _sid(story_id)
+    st = store.story(sid)
+    sc = st.scene_by_number(number)
+    if not sc:
+        raise HTTPException(404, f"no scene {number}")
+    lines = parse(sc.body)
+    return {"number": sc.number, "slugline": sc.slugline,
+            "synopsis": sc.synopsis, "status": sc.status,
+            "lines": lines_json(lines), "stats": stats(lines),
+            "cast": _cast_of(st, sc)}
+
+
+class ScriptIn(BaseModel):
+    text: str
+
+
+@router.put("/scenes/{number}/screenplay")
+def put_screenplay(number: int, body: ScriptIn, story_id: str | None = None):
+    """Save the canvas. Parse, normalise, reindex, all in this one request.
+
+    The reindex is not deferred, and that is invariant one from the spec §4.1:
+    there is no window where the scene text and the retrieval index disagree. It
+    is also what makes the knowledge base build itself while you type, because the
+    next agent run retrieves from the words you wrote a second ago rather than
+    from whatever was last imported.
+    """
+    sid = _sid(story_id)
+    st = store.story(sid)
+    sc = st.scene_by_number(number)
+    if not sc:
+        raise HTTPException(404, f"no scene {number}")
+    lines = parse(body.text)
+    # Store the normalised form, so what comes back on the next GET is exactly
+    # what the parser understood, not what was typed.
+    sc.body = to_text(lines)
+    if lines:
+        sc.status = "written"
+    # A heading typed into the canvas renames the scene. The slugline is canon and
+    # the editor is allowed to write it, because the writer typing INT. ELSEWHERE
+    # is a decision, not a suggestion.
+    head = next((l for l in lines if l.type == "scene_heading"), None)
+    if head and head.text != sc.slugline:
+        sc.slugline = head.text
+        ie, _loc, tod = screenplay.parse_slugline(head.text)
+        sc.int_ext = ie or sc.int_ext
+        sc.time_of_day = tod or sc.time_of_day
+    reindex_entity(sid, "scene", sc.id)
+    return {"lines": lines_json(lines), "stats": stats(lines),
+            "slugline": sc.slugline, "saved": True}
+
+
+def _card_for(ch):
+    """A VoiceCard for a stored character, compiling and fingerprinting if needed.
+
+    Deliberately a separate path from write_dialogue's inline version rather than a
+    refactor of it, because write_dialogue is working and demoed and today is not
+    the day to touch it. Both read and write `character.voice_card`, so they cannot
+    drift: the card is stored once and reused verbatim, which is the whole
+    consistency mechanism.
+    """
+    from app.voice import VoiceCard, compile_voice_card, embed_text
+
+    if not ch.voice_card:
+        vc = compile_voice_card(ch.name, ch.answers, ch.canon_version)
+        ch.voice_card = {"card": vc.card, "register": vc.register,
+                         "phrases": vc.phrases, "never_says": vc.never_says,
+                         "samples": vc.samples, "embedding": vc.embedding,
+                         "canon_version": ch.canon_version}
+    d = ch.voice_card
+    card = VoiceCard(name=ch.name, card=d["card"], register=d.get("register", {}),
+                     phrases=d.get("phrases", []),
+                     never_says=d.get("never_says", []),
+                     samples=d.get("samples", []), embedding=d.get("embedding"),
+                     canon_version=d.get("canon_version", 1))
+    if card.embedding is None and card.samples:
+        vecs = embed_text(card.samples)
+        card.embedding = [sum(x) / len(x) for x in zip(*vecs)]
+        ch.voice_card["embedding"] = card.embedding
+    return card
+
+
+def _heard_from(text: str) -> list[str]:
+    """What has actually been said out loud on the page, in order.
+
+    Read off the typed elements rather than tracked separately, so the agent hears
+    the page as it currently stands including lines the writer typed themselves or
+    edited after accepting them.
+    """
+    heard: list[str] = []
+    who = ""
+    for l in parse(text):
+        if l.type == "character":
+            who = l.text.upper()
+        elif l.type == "dialogue" and who:
+            heard.append(f"{who}: {l.text}")
+    return heard
+
+
+class LineIn(BaseModel):
+    character_id: str
+    parenthetical: str = ""
+    brief: str = ""          # overrides the scene synopsis if given
+    on_page: str = ""        # the canvas as it stands, unsaved edits included
+
+
+@router.post("/scenes/{number}/next-line")
+def next_line(number: int, body: LineIn, story_id: str | None = None):
+    """ONE line, from ONE character's own sub-agent, scored.
+
+    This is the editor's dialogue button. It differs from /dialogue in three ways
+    that all matter for writing rather than demoing: one line instead of an
+    exchange, the character is chosen by the writer rather than alternated, and
+    nothing is written to canon. The line comes back as typed elements and the
+    writer decides where it goes.
+    """
+    sid = _sid(story_id)
+    st = store.story(sid)
+    sc = st.scene_by_number(number)
+    if not sc:
+        raise HTTPException(404, f"no scene {number}")
+    ch = st.characters.get(body.character_id)
+    if not ch:
+        raise HTTPException(404, "no such character")
+    if ch.id not in sc.characters:
+        raise HTTPException(400, f"{ch.name} is not in scene {number}")
+
+    def work(emit):
+        from app.voice import referee_line, speak
+        from app.voice import _check_scene_for_secrets  # noqa: PLC2701
+
+        if ch.core_answered < 12:
+            # Refuse rather than invent a person. §9.2.
+            emit.violation(
+                "incomplete_character",
+                f"{ch.name} has {ch.core_answered} of 12 core answers. Writing "
+                f"their dialogue would be inventing them, not writing them.")
+            raise RuntimeError(f"{ch.name} is not ready for dialogue")
+
+        if not ch.voice_card:
+            emit.thinking(f"{ch.name} has no Voice Card yet, compiling one from "
+                          f"their interview answers", agent="DialogueCoach")
+        card = _card_for(ch)
+        reindex_entity(sid, "character", ch.id)
+
+        # The brief is what a camera in the room could see, and nothing else. This
+        # is the rule that was found by breaking it: a first run put "Maya already
+        # knew and did not tell him" in the shared brief and Ravi accused her of it
+        # on his third line, because he read it there. Private facts go in `knows`.
+        brief = body.brief or f"{sc.slugline}. {sc.synopsis}"
+        knows = {c.name: st.characters[c.id].knows_by(number)
+                 for c in [st.characters[i] for i in sc.characters
+                           if i in st.characters]}
+        leaked = _check_scene_for_secrets(brief, knows)
+        for msg in leaked:
+            # Loud rather than silent. A leaked secret produces dialogue that looks
+            # correct and is wrong, which is the most expensive bug on this stage.
+            emit.violation("knowledge_leak", msg)
+
+        mine = knows.get(ch.name, [])
+        cont = sc.continuity.get(ch.id) or {}
+        state = "; ".join(v for v in (cont.get("physical"),
+                                      cont.get("emotional")) if v)
+
+        pack = build_pack(sid, query=brief, character_ids=[ch.id],
+                          scene_number=number)
+        emit.context(pack.report()["slots"], pack.chunk_ids, pack.dropped)
+
+        agent_name = f"{ch.name} · Voice Card v{card.canon_version}"
+        emit.thinking(
+            f"sub-agent built from {ch.name}'s Voice Card verbatim, never "
+            f"summarised. Knows {len(mine)} facts as of scene {number}, and "
+            f"cannot refer to anything else.", agent=agent_name)
+
+        heard = _heard_from(body.on_page or sc.body)
+        line = speak(card, brief, mine, state, heard)
+        v = referee_line(line, card)
+        attempts = 1
+        if not v.passed:
+            emit.violation("voice_drift",
+                           f"{ch.name}: {v.reason}. Sending it back to their own "
+                           f"sub-agent with the register named.")
+            line = speak(card, brief, mine, state,
+                         heard + [f"(That last attempt did not sound like you. "
+                                  f"Your register is: {card.register}. Try again, "
+                                  f"more like your sample lines.)"])
+            v = referee_line(line, card)
+            attempts = 2
+
+        elements = dialogue_block(ch.name, line, body.parenthetical)
+        payload = {"character": ch.name, "character_id": ch.id, "line": line,
+                   "score": v.score, "passed": v.passed, "reason": v.reason,
+                   "canon_version": card.canon_version, "agent": agent_name,
+                   "attempts": attempts, "elements": lines_json(elements)}
+        emit.line_ready(payload)
+        return {"line": payload, "heard": len(heard),
+                "silent": line.strip() == "[says nothing]"}
+
+    return stream(work, agent="DialogueDirector")
+
+
+class ActionLineIn(BaseModel):
+    intent: str = ""
+    on_page: str = ""
+
+
+@router.post("/scenes/{number}/next-action")
+def next_action(number: int, body: ActionLineIn, story_id: str | None = None):
+    """ONE action paragraph, as a typed element, written to nothing.
+
+    The one paragraph limit is enforced by the response schema rather than by
+    asking politely. A model handed {"action": string} cannot return three
+    paragraphs and a scene heading however much it would like to, and that is the
+    entire mechanism behind an AI panel that does not produce slop.
+    """
+    sid = _sid(story_id)
+    st = store.story(sid)
+    sc = st.scene_by_number(number)
+    if not sc:
+        raise HTTPException(404, f"no scene {number}")
+
+    def work(emit):
+        import json as _json
+
+        from google.genai import types
+
+        from app.consistency import _SAFETY, _client
+        from app.voice import REASONING_MODEL
+
+        pack = build_pack(sid, query=body.intent or sc.synopsis,
+                          character_ids=sc.characters, scene_number=number)
+        emit.context(pack.report()["slots"], pack.chunk_ids, pack.dropped)
+        emit.thinking("one paragraph, present tense, only what a camera sees",
+                      agent="ActionWriter")
+        page = (body.on_page or sc.body)[-1200:]
+        resp = _client().models.generate_content(
+            model=REASONING_MODEL,
+            contents=(
+                "You are writing screenplay action. Present tense. Only what a "
+                "camera could see or a microphone could hear. No interiority, no "
+                "adverbs doing the work a verb should do, no camera directions.\n\n"
+                f"{pack.text()}\n\n"
+                f"SCENE {number}: {sc.slugline}\n{sc.synopsis}\n"
+                + (f"\nTHE PAGE SO FAR:\n{page}" if page else "")
+                + (f"\n\nWHAT THIS PARAGRAPH MUST DO: {body.intent}"
+                   if body.intent else "")
+                + "\n\nReturn JSON {\"action\": \"...\"} with EXACTLY ONE "
+                  "paragraph, at most four lines."),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema={"type": "object",
+                                 "properties": {"action": {"type": "string"}},
+                                 "required": ["action"]},
+                safety_settings=_SAFETY),
+        )
+        text = _json.loads(resp.text)["action"].strip()
+        emit.partial("action", text)
+        return {"action": text, "agent": "ActionWriter",
+                "elements": lines_json(action_block(text))}
+
+    return stream(work, agent="ActionWriter")
