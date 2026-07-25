@@ -28,7 +28,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INTERVAL="${INTERVAL:-60}"
 BRANCH="${BRANCH:-main}"
+MAX_FAILS="${MAX_FAILS:-3}"
 LAST=""
+FAILS=0
 
 cd "$ROOT"
 echo "· watching origin/$BRANCH every ${INTERVAL}s. Ctrl-C to stop."
@@ -55,9 +57,18 @@ while true; do
         echo "· deployed ${SHA:0:8}"
         LAST="$SHA"
       else
-        # Do not advance LAST. A failed deploy retries on the next tick, which is
-        # what you want when the cause was a transient build or a shared quota.
-        echo "· DEPLOY FAILED for ${SHA:0:8}, will retry"
+        # Retry a few times, because the usual cause is a transient build or the
+        # shared image quota. Then give up ON THIS SHA and wait for a new commit.
+        # Retrying forever is worse than stopping: it burns build quota on code
+        # that is not going to start working by itself, and it buries the first
+        # real error under a hundred identical ones.
+        FAILS=$((FAILS + 1))
+        echo "· DEPLOY FAILED for ${SHA:0:8} (attempt $FAILS of $MAX_FAILS)"
+        if [ "$FAILS" -ge "$MAX_FAILS" ]; then
+          echo "· giving up on ${SHA:0:8}. Waiting for a new commit on $BRANCH."
+          LAST="$SHA"
+          FAILS=0
+        fi
       fi
       git worktree remove --force "$WORK" 2>/dev/null || rm -rf "$WORK"
     else

@@ -17,16 +17,20 @@ from fastapi import APIRouter, Depends
 
 from app.api import auth as auth_routes
 from app.api import bible as bible_routes
-from app.api import board, cast, knowledge, script, scout
+from app.api import board, cast, health, knowledge, script, scout
 from app.auth import current_user
 
 api = APIRouter(prefix="/api")
 
-# Auth routes are open, or nobody could ever sign in. Everything after them is
-# guarded by one dependency, so no individual endpoint has to remember to check.
+# OPEN: auth routes, or nobody could ever sign in, and health, because a health
+# endpoint behind a login reports a working service as broken to every probe that
+# calls it. Everything after these is guarded by one dependency, so no individual
+# endpoint has to remember to check.
+#
 # With GOOGLE_OAUTH_CLIENT_ID unset the dependency returns the local user and the
 # whole app behaves exactly as it did before, which is what keeps the boot safe.
 api.include_router(auth_routes.router, tags=["auth"])
+api.include_router(health.router, tags=["health"])
 
 guarded = [Depends(current_user)]
 api.include_router(bible_routes.router, tags=["bible"], dependencies=guarded)
