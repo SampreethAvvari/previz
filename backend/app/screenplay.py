@@ -92,11 +92,11 @@ _TRANS = re.compile(
     r"^(FADE (IN|OUT|TO BLACK)|CUT TO|DISSOLVE TO|SMASH CUT TO|MATCH CUT TO|"
     r"WIPE TO|IRIS (IN|OUT)|INTERCUT WITH|THE END)\b", re.I)
 _TRANS_SUFFIX = re.compile(r"\bTO:$")
-# Deliberately case SENSITIVE, unlike the patterns above. Shot lines are written
+# Deliberately case sensitive, unlike the patterns above. A shot line is written
 # with the cue upper case and the rest in normal case ("ANGLE ON the route
 # sheet"), so we cannot require the whole line to be upper. That leaves the cue
-# itself as the only signal, and with re.I this would classify "Insert the key
-# into the lock" as a shot rather than an action.
+# itself as the only signal, and with re.I this would read "Insert the key into
+# the lock" as a shot rather than as action.
 _SHOT = re.compile(
     r"^(ANGLE ON|CLOSE ON|CLOSER ON|WIDE ON|WIDER|POV|INSERT|BACK TO|"
     r"INTERCUT|MONTAGE|SERIES OF SHOTS|AERIAL|UNDERWATER|REVERSE ANGLE)\b")
@@ -156,9 +156,6 @@ def infer(text: str, prev_type: str | None, after_blank: bool,
         return "scene_heading", s
     if upper and (_TRANS.match(s) or _TRANS_SUFFIX.search(s)):
         return "transition", s
-    # No `upper` gate here, unlike transitions. "ANGLE ON the route sheet" is
-    # correctly formatted and is not an all-caps line, so requiring upper would
-    # miss the common case. _SHOT is case sensitive, which carries the check.
     if _SHOT.match(s):
         return "shot", s
     if s.startswith("(") and s.endswith(")"):
