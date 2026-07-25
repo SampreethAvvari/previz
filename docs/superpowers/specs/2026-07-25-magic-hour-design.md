@@ -21,7 +21,9 @@ An AI filmmaking studio. Six tools that share one story bible, so nothing drifts
 | **Scout** | Real locations for a scene, pinned to scene numbers. |
 | **Muse** | Talk through the story. Every idea lands in the right place. |
 
-The thesis, and the thing to protect above all else: **consistency is a property of the knowledge layer, not of any single feature.** A character sounds the same in scene 18 as in scene 3 because both dialogue calls read the same canon. A face looks the same in shot 41 as in shot 2 because both image calls condition on the same locked reference sheet, and a referee measures the result. Every design decision below serves that.
+The thesis, and the thing to protect above all else: **consistency is a property of the knowledge layer, not of any single feature.** A character sounds the same in scene 18 as in scene 3 because both dialogue calls read the same compiled Voice Card, byte for byte. A face looks the same in shot 41 as in shot 2 because both image calls condition on the same locked reference sheet and the same frozen Identity Card. In both cases a referee then measures the output against a stored fingerprint and rejects drift.
+
+Identity is stored four ways, because they do four different jobs: **text** for prompt injection, **images** for conditioning the image model, **vectors** for refereeing the result, and a **graph** for what is true between people and when it became true. §6 is the full mechanism, and every other section exists to serve it.
 
 ### 1.1 Non-goals
 
@@ -208,10 +210,11 @@ create table characters (
   name           text not null,
   aliases        text[] not null default '{}',
   role           text,                   -- lead, supporting, bit
-  look           jsonb,                  -- frozen physical descriptor, drives prompts
-  sheet_gcs      text,                   -- locked reference sheet object
-  face_embedding vector(1408),           -- the fingerprint
+  look           jsonb,                  -- raw physical facts from the interview
+  face_embedding vector(1408),           -- the face fingerprint, the visual referee
   completeness   real not null default 0,-- 0..1 across the 7 interview parts
+  canon_version  int  not null default 1,-- bumped on ANY canon change about them.
+                                         -- Stales the identity and voice cards.
   created_at     timestamptz not null default now()
 );
 create index on characters (story_id);
@@ -236,6 +239,75 @@ create table character_answers (
   created_at   timestamptz not null default now(),
   unique (character_id, question_id)
 );
+
+-- COMPILED IDENTITY ARTIFACTS. See §6. These are written once and reused
+-- verbatim. They are never re-derived per call, because re-deriving is what
+-- causes drift. They are recompiled only when canon_version changes.
+--
+-- Grouped here for readability, but continuity_state references scenes, so in
+-- the migration these four tables are created AFTER scenes. Creation order is
+-- listed in the foundation plan, Task 4.
+create table identity_cards (            -- how a character LOOKS
+  id            uuid primary key default gen_random_uuid(),
+  character_id  uuid not null references characters(id) on delete cascade,
+  canon_version int  not null,           -- matches characters.canon_version
+  descriptor    text not null,           -- frozen prose, pasted verbatim into prompts
+  wardrobe      text not null,           -- default costume, unless a scene overrides
+  negative      text,                    -- what this character must never look like
+  sheet_gcs     text,                    -- front / three quarter / profile sheet
+  created_at    timestamptz not null default now(),
+  unique (character_id, canon_version)
+);
+
+create table voice_cards (               -- how a character SOUNDS
+  id            uuid primary key default gen_random_uuid(),
+  character_id  uuid not null references characters(id) on delete cascade,
+  canon_version int  not null,
+  card          text not null,           -- frozen prose, pasted verbatim into prompts
+  register      jsonb not null,          -- {sentence_length, formality, profanity,
+                                         --  hedging, humour, silence_tolerance}
+  phrases       text[] not null default '{}',   -- verbatim tics they actually say
+  never_says    text[] not null default '{}',   -- words out of character for them
+  samples       text[] not null default '{}',   -- canonical lines, few-shot examples
+  voice_embedding vector(768),           -- fingerprint of the samples, the referee
+  created_at    timestamptz not null default now(),
+  unique (character_id, canon_version)
+);
+
+-- What is true of a character AT A GIVEN POINT in the story. This is why scene 18
+-- can know about the cut on Maya's hand from scene 12.
+create table continuity_state (
+  id           uuid primary key default gen_random_uuid(),
+  character_id uuid not null references characters(id) on delete cascade,
+  scene_id     uuid not null references scenes(id) on delete cascade,
+  wardrobe     text,                     -- overrides identity_cards.wardrobe
+  physical     text,                     -- injuries, dirt, wet hair, blood
+  emotional    text,                     -- where they are emotionally, in one line
+  carrying     text[] not null default '{}',   -- props on their person
+  unique (character_id, scene_id)
+);
+
+-- The graph. Typed edges over the same Postgres, queried with recursive CTEs.
+-- Feeds three things: the knowledge horizon (what a character knows by scene N),
+-- ScriptSupervisor's violation check, and Muse's "what if these two met".
+create table story_edges (
+  id          uuid primary key default gen_random_uuid(),
+  story_id    uuid not null references stories(id) on delete cascade,
+  src_type    text not null,             -- 'character','scene','location','fact'
+  src_id      uuid not null,
+  edge        text not null check (edge in
+                ('knows','knows_about','present_in','related_to','wants',
+                 'fears','owes','loves','lies_to','set_at')),
+  dst_type    text not null,
+  dst_id      uuid not null,
+  since_scene int,                       -- null means always true
+  until_scene int,                       -- null means still true
+  layer       text not null check (layer in ('canon','draft')),
+  note        text,
+  created_at  timestamptz not null default now()
+);
+create index on story_edges (story_id, src_id, edge);
+create index on story_edges (story_id, dst_id, edge);
 
 create table scenes (
   id           uuid primary key default gen_random_uuid(),
@@ -345,11 +417,13 @@ create table assets (              -- uploaded scripts and reference images
 );
 ```
 
-### 4.1 The one invariant that matters
+### 4.1 The two invariants that matter
 
-**A structured row and its knowledge chunks are written in the same transaction, or neither is written.** Implemented as a single `reindex_entity(conn, entity_type, entity_id)` call inside every write path, not as a trigger and not as a background job. A fact and its embedding cannot disagree, because there is no window in which they could.
+**One · A structured row and its knowledge chunks are written in the same transaction, or neither is written.** Implemented as a single `reindex_entity(conn, entity_type, entity_id)` call inside every write path, not as a trigger and not as a background job. A fact and its embedding cannot disagree, because there is no window in which they could.
 
 Consequence to accept: writes are slower by one embedding call. That is the correct trade. An eventually consistent index is exactly the bug class this product exists to avoid.
+
+**Two · A canon change about a character bumps `canon_version` in the same transaction.** That is what stales the Identity Card and Voice Card and forces a recompile on next use (§6.1). Without it, a corrected fact would keep producing the old face and the old voice forever, which is the worst possible failure: the user fixes something and nothing changes.
 
 ### 4.2 Ownership enforcement
 
@@ -407,21 +481,93 @@ This is context management as a visible, debuggable artifact. It is also how a b
 
 ---
 
-## 6. Character consistency
+## 6. Consistency
 
-The hardest problem in the product. Four stages.
+**This is the product.** Every other section is in service of it. A character must look the same in shot 41 as in shot 2, and sound the same in scene 18 as in scene 3, across any scene, any time, in any order the user works.
 
-**1 · Casting.** Before any storyboarding, each character is cast. `PortraitArtist` generates four candidates from the character's canon `look` plus the story's visual style. The user picks one.
+### 6.0 The failure mode we are designing against
 
-**2 · Lock the sheet.** The chosen portrait is regenerated as a small reference sheet (front, three quarter, profile) on a neutral background, with a frozen wardrobe note. Stored at `characters.sheet_gcs`. This is the identity of record.
+The naive approach re-derives identity on every call: ask the model to summarise how Maya looks before each image, ask it to summarise how Maya talks before each line. Each summary is slightly different from the last. Nothing is obviously broken at any single step, and by scene 18 she is a different person. **Drift is not caused by bad models. It is caused by re-deriving.**
 
-**3 · Condition every shot on it.** Every image call for a shot containing that character receives the reference sheet as an input image alongside the prompt, plus the frozen text descriptor. Within a scene, the previously approved shot is also passed, so lighting, wardrobe state and blocking carry forward.
+So the mechanism is:
 
-**4 · Referee the result.** After generation, the frame is embedded with `multimodalembedding@001` and compared by cosine to `characters.face_embedding`. Below threshold means drift: regenerate once with a stronger reference emphasis, then a second time, then flag rather than burn money. Scores are written to `shots.face_scores` and streamed to BigQuery.
+> **Compile identity once. Store it. Reuse it verbatim. Recompile only when canon changes. Measure the output against the stored identity, every time.**
 
-**Why embeddings are the referee and not the conditioner.** You cannot feed a vector into an image model. Image models condition on reference images and text. So the embedding does the job it is actually good at: measuring whether the output matches the intended identity. That turns consistency from a claim into a number, which is also §14's accuracy metric.
+Three storage forms per character, because they do three different jobs and no one of them is sufficient:
 
-**Thresholds are calibrated, not guessed.** During integration we generate 20 frames of a cast character and 20 of a different person, then set the threshold between the distributions. The calibration run and the chosen value are recorded in `evals/`.
+| Form | Stored as | Job |
+|---|---|---|
+| **Text** | `identity_cards.descriptor`, `voice_cards.card` | What gets injected into prompts, character for character identical every time |
+| **Images** | `identity_cards.sheet_gcs` | What conditions the image model, since it cannot read a vector |
+| **Vectors** | `characters.face_embedding`, `voice_cards.voice_embedding` | The referee, measuring whether output matches intent |
+| **Graph** | `story_edges` | What is true between people, and when it became true |
+
+### 6.1 Compiled cards, versioned and immutable
+
+`characters.canon_version` increments on any canon change about that character. `identity_cards` and `voice_cards` are keyed by `(character_id, canon_version)`, so:
+
+- A card is **written once and never edited.** Editing is what lets drift in.
+- A canon change makes the current card stale, and the next call recompiles a new version.
+- Every generated shot and every generated line records which card version produced it, so any inconsistency is traceable to a specific version rather than being a mystery.
+- Recompiling is rare and deliberate. Reuse is the normal path.
+
+Cards are visible and editable by the user. They are the single knob for fixing a character who is coming out wrong, instead of the user re-prompting and hoping.
+
+### 6.2 Visual consistency
+
+**1 · Casting.** Before any storyboarding, each character is cast. `PortraitArtist` generates four candidates from canon `look` plus the story visual style. The user picks one.
+
+**2 · Compile the Identity Card.** From canon, once: a frozen prose `descriptor` (age, build, face shape, hair, eyes, skin, distinguishing marks), a `wardrobe` default, and a `negative` clause naming what this character must never look like. Then the chosen portrait is regenerated as a reference sheet (front, three quarter, profile) on neutral grey. Card and sheet are written together.
+
+**3 · Fingerprint.** The sheet's frontal view is embedded with `multimodalembedding@001` into `characters.face_embedding`.
+
+**4 · Condition every shot on all of it.** Every image call for a shot containing that character receives, without exception:
+- the reference sheet as an input image
+- `identity_cards.descriptor` pasted verbatim, not paraphrased
+- the wardrobe: `continuity_state.wardrobe` for that scene if set, otherwise the card default
+- `continuity_state.physical` for that scene, so a cut received in scene 12 is still there in scene 18
+- the previously approved shot from the same scene, so lighting and blocking carry forward
+- the `negative` clause
+
+**5 · Referee the result.** The generated frame is embedded and compared by cosine to `face_embedding`. Below threshold means drift: regenerate with stronger reference emphasis, twice at most, then flag rather than burn budget. Every score is written to `shots.face_scores` with the card version, and streamed to BigQuery.
+
+**Why the vector is the referee and not the conditioner.** You cannot feed an embedding into an image model; it conditions on images and text. So the vector does what it is genuinely good at: measuring whether the output matches the intended identity. That turns consistency from a claim into a number, which is §14's headline metric.
+
+### 6.3 Voice consistency
+
+The same architecture, applied to dialogue, because a character sounding wrong is as damaging as looking wrong and much easier to miss.
+
+**1 · Compile the Voice Card,** once per `canon_version`, from the interview answers. Not a vibe summary, a structured artifact:
+- `card` · frozen prose describing how they speak and why
+- `register` · measurable axes: typical sentence length, formality, profanity, how much they hedge, whether they use humour as defence, how comfortable they are with silence
+- `phrases` · verbatim tics they actually say, taken from question 12
+- `never_says` · vocabulary and constructions out of character for them, which is the constraint that does the most work
+- `samples` · canonical lines that define the voice, used as few-shot examples
+
+**2 · Voice fingerprint.** `samples` are embedded into `voice_cards.voice_embedding`.
+
+**3 · Every `CharacterVoice` sub-agent is built from the card verbatim.** `DialogueDirector` compiles one sub-agent per character present in the scene, and each one's system prompt contains that character's Voice Card character for character, plus their knowledge horizon (§6.4) and their `continuity_state`. **No sub-agent ever summarises the character itself.** It receives the compiled card.
+
+**4 · Referee the result.** Generated dialogue for a character is embedded and compared by cosine to their `voice_embedding`. Below threshold means the line does not sound like them, and it goes back to that sub-agent with the specific `register` axis that is off. Same loop as faces, same numbers, logged the same way.
+
+This is why a character sounds identical in scene 18 and scene 3: both calls read the same card bytes, and both outputs are measured against the same fingerprint.
+
+### 6.4 The knowledge horizon
+
+The other half of dialogue consistency is not tone, it is **what a character knows yet.** A character who references something they have not learned breaks a scene more completely than a wrong adjective.
+
+`story_edges` carries `knows` and `knows_about` edges stamped with `since_scene`. For any scene N, a recursive query returns exactly what a character knows as of N. That set goes into the `CharacterVoice` prompt as a hard boundary, and `ScriptSupervisor` checks generated text against it.
+
+The same graph answers Muse's most useful questions: who has met whom, who is lying to whom, who wants something from whom, and therefore what would happen if these two were in a room. That is not a side feature, it is the graph paying for itself twice.
+
+### 6.5 Thresholds are calibrated, not guessed
+
+Both thresholds are set from measured distributions, not chosen by feel:
+
+- **Face:** generate 20 frames of a cast character and 20 of a different person, plot both cosine distributions, set the threshold in the gap.
+- **Voice:** score 20 lines written for a character against their own fingerprint, and 20 lines written for a different character, same procedure.
+
+Until calibration is done, the system **shows the score and does not auto reject.** An uncalibrated threshold that silently rejects good output is worse than no threshold. The calibration runs and the chosen values are committed under `evals/`.
 
 ---
 
@@ -480,7 +626,16 @@ Not an LLM. The only way any agent touches the bible.
 
 - **`SceneArchitect`** · `gemini-2.5-pro`. Given intent, produces the scene's purpose, beats, and slugline. Writes no prose. Output is a JSON schema, so it cannot drift into writing the scene.
 - **`ActionWriter`** · `gemini-2.5-pro`. Writes **exactly one action paragraph** per call. Enforced by response schema (`{action: string}`), not by asking politely in a prompt. This is how "no slop" becomes a guarantee rather than a hope.
-- **`DialogueDirector`** · custom ADK agent. Reads who is present, then **compiles one `CharacterVoice` LlmAgent per character at request time**, system prompt built from that character's canon answers: voice, frequent phrases, honesty, what they want, what they hide, what they refuse. Runs them as a `ParallelAgent` for candidate lines, then sequences the exchange. If a character has no usable knowledge (fewer than the 12 core answers) it **refuses and offers to open the interview** rather than inventing a person.
+- **`DialogueDirector`** · custom ADK agent. Reads who is present, then **builds one `CharacterVoice` sub-agent per character at request time.** Each sub-agent's system prompt contains, verbatim and unsummarised (§6.3):
+  - that character's **Voice Card** for the current `canon_version`: prose, `register` axes, `phrases`, `never_says`, `samples`
+  - their **knowledge horizon** as of this scene number (§6.4), as a hard boundary on what they can refer to
+  - their **`continuity_state`** for this scene: wardrobe, physical condition, where they are emotionally
+
+  Sub-agents run as a `ParallelAgent` to produce candidate lines, then `DialogueDirector` sequences the exchange. Each generated line is scored against that character's `voice_embedding`; a line below threshold goes back to its own sub-agent with the specific `register` axis that is off. Every line records the card version that produced it.
+
+  A `CharacterVoice` sub-agent **never summarises its own character.** It receives the compiled card. This is the mechanism, not a style preference: summarising per call is what makes a voice drift across a script.
+
+  If a character has fewer than the 12 core answers, `DialogueDirector` **refuses and offers to open the interview** rather than inventing a person.
 - **`ScriptSupervisor`** · `gemini-2.5-pro` inside a `LoopAgent`, max 2 iterations. Runs after every write. Checks new text against canon for: knowledge violations (a character knows something not yet established), prop and wardrobe contradictions, time of day mismatches, and voice drift. Violations return to the writer as structured feedback. **This is the reasoning loop, and it is load bearing rather than decorative.**
 
 ### 9.3 Camera Department
@@ -637,11 +792,19 @@ Traces stream to BigQuery `magic_hour_telemetry`: `agent_runs`, `tool_calls`, `g
 
 | Metric | Method | Target |
 |---|---|---|
-| **Face identity** | cosine of each generated frame against the character fingerprint; report mean and min | mean ≥ 0.80, min ≥ 0.65 |
-| **Continuity violations caught** | ScriptSupervisor findings per 100 lines on a corpus with 10 deliberately seeded contradictions | ≥ 8 of 10 caught |
-| **Voice fidelity** | `gemini-2.5-flash-lite` as judge, scoring generated dialogue against that character's canon, 1 to 5, blind to which character generated it | mean ≥ 4.0 |
+| **Face identity** | cosine of each generated frame against the character's `face_embedding`; report mean and min | mean ≥ 0.80, min ≥ 0.65 |
+| **Face identity across distance** | the same metric, but only comparing the **first** and **last** shots generated for a character, which is where drift actually shows | mean ≥ 0.78, and no worse than 0.03 below the overall mean |
+| **Voice identity** | cosine of each generated line against the character's `voice_embedding` | mean ≥ 0.75 |
+| **Voice identity across distance** | generated lines from the earliest and latest scenes for a character, compared to each other | mean ≥ 0.72 |
+| **Voice fidelity, judged** | `gemini-2.5-flash-lite` as judge, scoring generated dialogue against that character's Voice Card, 1 to 5, blind to which character generated it | mean ≥ 4.0 |
+| **Voice attribution** | strip the character names from 20 generated lines and ask the judge who said each. Distinct voices are attributable; generic ones are not | ≥ 0.70 correct |
+| **Knowledge horizon violations** | generated lines referencing something the character does not know as of that scene (§6.4) | 0 |
+| **Continuity violations caught** | ScriptSupervisor findings on a corpus with 10 deliberately seeded contradictions | ≥ 8 of 10 caught |
 | **Grounding coverage** | share of asserted facts traceable to a retrieved chunk | ≥ 0.90 |
+| **Card reuse rate** | share of generations that reused a stored card versus recompiling. Low reuse means something is invalidating cards it should not, which is drift about to happen | ≥ 0.95 |
 | **Latency and cost** | p50 and p95 per surface, USD per run | board ≤ 45s for 6 shots |
+
+The two "across distance" metrics exist because an average taken over all shots hides exactly the failure we care about. Ten shots that each drift slightly from their neighbour can hold a high mean while the first and last frames are visibly different people. Measuring the endpoints is measuring drift; measuring the average is measuring nothing.
 
 Targets are commitments to measure against, not predictions. A missed target is a finding to report, not a number to quietly adjust.
 
