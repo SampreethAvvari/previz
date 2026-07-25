@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Deploy Magic Hour to Cloud Run. One command, one service.
+# Deploy Magic Hour to Cloud Run.
 #
 #   ./scripts/deploy.sh
+#   GOOGLE_OAUTH_CLIENT_ID=... ./scripts/deploy.sh
+#
+# The sequence is deploy with NO traffic, smoke test the new revision on its own
+# URL, and only then move traffic. A broken revision therefore never serves a
+# single user request: it is built, tested, found wanting, and left sitting there
+# while the previous revision keeps working.
+#
+# That ordering is the difference between a deploy that can fail safely and one
+# that takes the demo down while you read the logs.
 #
 # The design has two services, web public and agents internal only. That split is
-# correct and is cancelled for today (docs/NOW.md): with one process there is no
-# ID token to verify and no second cold start to pay for.
-#
-# min-instances 1 because cold starting a container that imports the Vertex SDK is
-# four to eight seconds, and on a demo stage that reads as broken.
+# correct and is cancelled for today (docs/NOW.md): with one process there is no ID
+# token to verify and no second cold start to pay for.
 set -euo pipefail
 
 PROJECT="${GCP_PROJECT:-nyu-ai-builder26nyc-9338}"
@@ -18,22 +24,18 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "· project $PROJECT · region $REGION · service $SERVICE"
 gcloud config set project "$PROJECT" >/dev/null
-
 gcloud services enable run.googleapis.com artifactregistry.googleapis.com >/dev/null
 
 # Built locally and pushed, NOT via `gcloud run deploy --source`.
 #
-# --source hands the build to Cloud Build, whose default service account is missing
+# --source hands the build to Cloud Build, whose default service account lacks
 # roles/cloudbuild.builds.builder on this project, and granting it needs
 # resourcemanager.projects.setIamPolicy which this account does not have. The
-# failure is also misleading: it reports a permission denied on the source bucket
-# rather than on the build. Building here and pushing uses only permissions we
-# already hold, so it needs no policy change at all.
+# failure is misleading too: it reports permission denied on the source bucket
+# rather than on the build. Building here uses only permissions we already hold.
 IMAGE="$REGION-docker.pkg.dev/$PROJECT/cloud-run-source-deploy/$SERVICE"
 TAG="$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo manual)"
 
-# Tag by commit so a revision can be traced back to a SHA, and :latest so there is
-# always something obvious to roll forward to.
 echo "· building $IMAGE:$TAG"
 gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet >/dev/null 2>&1
 
@@ -46,6 +48,14 @@ docker push -q "$IMAGE:$TAG" >/dev/null
 docker push -q "$IMAGE:latest" >/dev/null
 echo "· pushed $TAG"
 
+# --update-env-vars, never --set-env-vars. --set replaces the whole environment, so
+# any deploy that did not happen to pass GOOGLE_OAUTH_CLIENT_ID would silently
+# delete it and turn login off for everyone.
+ENVS="GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION"
+ENVS="$ENVS${GOOGLE_MAPS_API_KEY:+,GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY}"
+ENVS="$ENVS${GOOGLE_OAUTH_CLIENT_ID:+,GOOGLE_OAUTH_CLIENT_ID=$GOOGLE_OAUTH_CLIENT_ID}"
+
+echo "· deploying with no traffic"
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE:$TAG" \
   --region "$REGION" \
@@ -55,21 +65,44 @@ gcloud run deploy "$SERVICE" \
   --cpu 2 \
   --timeout 600 \
   --port 8080 \
-  --update-env-vars "GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION${GOOGLE_MAPS_API_KEY:+,GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY}${GOOGLE_OAUTH_CLIENT_ID:+,GOOGLE_OAUTH_CLIENT_ID=$GOOGLE_OAUTH_CLIENT_ID}"
+  --no-traffic \
+  --tag "rev$(echo "$TAG" | tr -cd '[:alnum:]' | tail -c 8)" \
+  --update-env-vars "$ENVS" \
+  --quiet
 
-URL="$(gcloud run services describe "$SERVICE" --region "$REGION" \
+REV="$(gcloud run services describe "$SERVICE" --region "$REGION" \
+        --format='value(status.latestCreatedRevisionName)')"
+# The tagged URL addresses this revision specifically, so the smoke test measures
+# the thing we just built and not whatever is currently serving traffic.
+CAND="$(gcloud run services describe "$SERVICE" --region "$REGION" \
+        --format="value(status.traffic.url)" --flatten="status.traffic[]" \
+        --filter="status.traffic.revisionName=$REV" 2>/dev/null | head -1)"
+LIVE="$(gcloud run services describe "$SERVICE" --region "$REGION" \
         --format='value(status.url)')"
-echo
-echo "  $URL"
-echo "  health · $URL/api/health"
-echo
 
-# Smoke test the revision rather than trusting that the deploy printed a URL. A
-# service that deployed and does not answer is the failure worth catching here,
-# not on stage.
-if curl -fsS --max-time 30 "$URL/api/health" >/dev/null; then
-  echo "  health answered"
+echo "· built revision $REV"
+
+if [ -z "$CAND" ]; then
+  echo "  WARNING: no tagged URL for $REV, smoke testing the live URL after cutover"
+  gcloud run services update-traffic "$SERVICE" --region "$REGION" \
+    --to-latest --quiet >/dev/null
+  "$ROOT/scripts/smoke.sh" "$LIVE"
 else
-  echo "  WARNING: health did not answer. Check: gcloud run services logs read $SERVICE --region $REGION"
-  exit 1
+  if "$ROOT/scripts/smoke.sh" "$CAND"; then
+    echo
+    echo "· smoke passed, moving traffic to $REV"
+    gcloud run services update-traffic "$SERVICE" --region "$REGION" \
+      --to-revisions "$REV=100" --quiet >/dev/null
+  else
+    echo
+    echo "  DEPLOY REJECTED. $REV failed its smoke test and is serving NO traffic."
+    echo "  The previous revision is still live at $LIVE"
+    echo "  Logs: gcloud run services logs read $SERVICE --region $REGION"
+    exit 1
+  fi
 fi
+
+echo
+echo "  live   · $LIVE"
+echo "  health · $LIVE/api/health"
+echo "  commit · $TAG"
