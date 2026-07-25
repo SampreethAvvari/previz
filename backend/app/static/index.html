@@ -93,81 +93,73 @@
           <div id="spine" class="tiny muted"></div>
         </div>
       </div>
-      <!-- The Style Card. Asked once, pasted verbatim into every image and every
-           line, and never dropped from the pack. -->
-      <div class="panel pad" style="margin-bottom:20px">
-        <div class="eyebrow">Style card · how the film looks and feels</div>
-        <div class="st-ask">
-          <div style="flex:1">
-            <label class="lab">Describe the film in your own words</label>
-            <input class="f" id="stAsk"
-              placeholder="a wet night shift, nobody sleeping, everything lit by the machines">
-          </div>
-          <button class="act" id="stCompile">Suggest axes</button>
+      <!-- Three tools, one at a time. Stacked they were a wall of panels, and
+           the point of each one is lost if you have to scroll past the other
+           two to find it. -->
+      <div class="panel pad tools" style="margin-bottom:20px">
+        <div class="seg" id="toolSeg">
+          <button class="on" data-t="ctx">Context</button>
+          <button data-t="horizon">Horizon</button>
+          <button data-t="style">Style</button>
+          <span class="seg-note" id="toolNote"></span>
         </div>
-        <div class="st-grid" id="stAxes"></div>
-        <label class="lab" style="margin-top:12px">Anything else about the look</label>
-        <textarea class="f" id="stLook" rows="2"
-          placeholder="the things that do not fit an axis"></textarea>
-        <div class="st-foot">
-          <button class="act primary" id="stSave">Save style card</button>
-          <div class="tiny" id="stStatus"></div>
-        </div>
-      </div>
 
-      <!-- The Context Inspector. Every generated line in this product comes out
-           of one assembled Continuity Pack, so this is where a wrong line gets
-           traced to the fact behind it rather than argued about. -->
-      <div class="panel lit pad" style="margin-bottom:20px">
-        <div class="eyebrow">Context Inspector · the exact payload a model receives</div>
-        <div class="ci-controls">
-          <div>
-            <label class="lab">Scene</label>
-            <select class="f" id="ciScene"></select>
+        <!-- Context. The exact payload a model receives. -->
+        <div class="tool on" data-t="ctx">
+          <div class="ci-controls">
+            <div>
+              <label class="lab">Scene</label>
+              <select class="f" id="ciScene"></select>
+            </div>
+            <div>
+              <label class="lab">Query</label>
+              <input class="f" id="ciQuery" placeholder="what does Ravi know about the route">
+            </div>
+            <div class="btns">
+              <button class="act" id="ciRun">Assemble</button>
+              <button class="act" id="ciExtract"
+                title="Read this scene and propose what it establishes. Nothing becomes canon until you promote it.">Propose facts</button>
+            </div>
           </div>
-          <div>
-            <label class="lab">Retrieval query</label>
-            <input class="f" id="ciQuery" placeholder="what does Ravi know about the route">
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="act" id="ciRun">Assemble</button>
-            <button class="act" id="ciExtract"
-              title="Read this scene and propose what it establishes. Nothing becomes canon until you promote it.">Propose facts</button>
-          </div>
+          <div class="ci-cast" id="ciCast"></div>
+          <div id="ciOut"></div>
         </div>
-        <div class="ci-cast" id="ciCast"></div>
-        <div class="tiny faint" style="margin-top:9px">
-          Fixed slots, fixed budgets, assembled by one function for every call in
-          the product. On overflow the pack drops turn, then local, then
-          retrieved, and never style or cast, because those are the identity.
-          Click a slot to read it verbatim, and a chunk id to open the row it came
-          from.
-        </div>
-        <div id="ciOut"></div>
-      </div>
 
-      <!-- The knowledge horizon. Drag the scene and watch the boundary move. -->
-      <div class="panel pad" style="margin-bottom:20px">
-        <div class="eyebrow">Knowledge horizon · what a character knows, and when</div>
-        <div class="hz-bar">
-          <div class="ci-cast" id="hzCast" style="margin-top:0"></div>
-          <div class="hz-scene">
-            <input type="range" id="hzScene" min="1" max="3" value="1" step="1">
-            <span class="tiny faint mono" id="hzSceneLabel"></span>
+        <!-- Horizon. Drag the scene and watch the boundary move. -->
+        <div class="tool" data-t="horizon">
+          <div class="hz-bar">
+            <div class="ci-cast" id="hzCast" style="margin-top:0"></div>
+            <div class="hz-scene">
+              <input type="range" id="hzScene" min="1" max="3" value="1" step="1">
+              <span class="tiny faint mono" id="hzSceneLabel"></span>
+            </div>
+          </div>
+          <div class="grid two" id="hzOut" style="margin-top:14px"></div>
+          <div class="hz-check">
+            <label class="lab">Test a line</label>
+            <input class="f" id="hzLine"
+              placeholder="So the night route is being cut at the end of the month, then.">
+            <div id="hzVerdict"></div>
           </div>
         </div>
-        <div class="grid two" id="hzOut" style="margin-top:14px"></div>
-        <div class="hz-check">
-          <label class="lab">Could they have said this yet</label>
-          <input class="f" id="hzLine"
-            placeholder="So the night route is being cut at the end of the month, then.">
-          <div id="hzVerdict"></div>
-          <div class="tiny faint" style="margin-top:8px">
-            The same check the supervisor runs after every write. A fact held by
-            someone else, absent from this character's horizon, whose rare words
-            turn up in the line, is a violation. Common story words are treated as
-            background, so a clean verdict means the line refers to nothing
-            withheld.
+
+        <!-- Style. Asked once, pasted verbatim into every image and every line. -->
+        <div class="tool" data-t="style">
+          <div class="st-ask">
+            <div style="flex:1">
+              <label class="lab">Describe the film</label>
+              <input class="f" id="stAsk"
+                placeholder="a wet night shift, nobody sleeping, everything lit by the machines">
+            </div>
+            <button class="act" id="stCompile">Suggest axes</button>
+          </div>
+          <div class="st-grid" id="stAxes"></div>
+          <label class="lab" style="margin-top:14px">Anything else</label>
+          <textarea class="f" id="stLook" rows="2"
+            placeholder="what does not fit an axis"></textarea>
+          <div class="st-foot">
+            <button class="act primary" id="stSave">Save</button>
+            <div class="tiny" id="stStatus"></div>
           </div>
         </div>
       </div>

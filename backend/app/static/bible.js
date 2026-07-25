@@ -66,8 +66,7 @@
         </div>
       </div>`;
     }).join("")
-      : `<div class="empty">No locations yet. Scout writes them here, and a place
-           only becomes canon when it is shortlisted.</div>`;
+      : `<div class="empty">No locations yet. Shortlisting one makes it canon.</div>`;
   }
 
   /* --------------------------------------------------- the Context Inspector */
@@ -135,9 +134,7 @@
       </div>
       ${(pack.chunks || []).length
         ? pack.chunks.map(chunkRow).join("")
-        : `<div class="empty">Nothing retrieved. The retrieved slot only fills when
-             there is a query, so type one above to see hybrid search feeding the
-             pack.</div>`}
+        : `<div class="empty">Type a query to see what retrieval feeds the pack.</div>`}
     `;
 
     qa("#ciOut .sl .hd").forEach((h) => h.onclick = () => {
@@ -267,12 +264,16 @@
       box.innerHTML = `<div class="empty">Could not read the style card.</div>`;
       return;
     }
+    // Short label on screen, the question and the reason on hover. The long form
+    // was correct and made the panel unreadable, and a form nobody finishes
+    // teaches the model nothing.
     box.innerHTML = styleState.axes.map((a) => `
       <div class="st-ax">
-        <label class="lab" for="st-${clean(a.key)}">${clean(a.question)}</label>
+        <label class="lab" for="st-${clean(a.key)}"
+               title="${clean(a.question)} · ${clean(a.why)}">${clean(a.label || a.key)}</label>
         <input class="f" id="st-${clean(a.key)}" data-k="${clean(a.key)}"
-               value="${clean(a.value)}" placeholder="${clean(a.hint)}">
-        <div class="tiny faint">${clean(a.why)}</div>
+               value="${clean(a.value)}" placeholder="${clean(a.hint)}"
+               title="${clean(a.question)}">
       </div>`).join("");
 
     const look = q("#stLook");
@@ -287,11 +288,11 @@
     const missing = styleState.total - answered;
     el.innerHTML = msg ? `<span class="ok-note">${clean(msg)}</span>`
       : missing
-        ? `<span class="warn-note">${answered} of ${styleState.total} axes
-             answered. The pack never drops this slot, so each blank one is a
-             decision the model makes on its own, differently every time.</span>`
-        : `<span class="ok-note">All ${styleState.total} axes answered. This card
-             is pasted verbatim into every image and every line.</span>`;
+        ? `<span class="warn-note" title="The pack never drops the style slot, so
+             a blank axis is decided by the model, differently every time."
+             >${answered} of ${styleState.total} axes · blanks get decided for you</span>`
+        : `<span class="ok-note">${styleState.total} of ${styleState.total} axes ·
+             reused verbatim in every image and line</span>`;
   }
 
   async function saveStyle() {
@@ -304,7 +305,7 @@
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ axes, look: q("#stLook")?.value || "" }),
       })).json();
-      stStatus("Saved and reindexed. Every axis is a chunk in the bible now.");
+      stStatus("Saved. Every axis is now a chunk in the bible.");
       assemble();                       // the style slot just changed
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "Save style card"; }
@@ -325,7 +326,7 @@
         body: JSON.stringify({ description }),
       })).json();
       if (!r.ok) {
-        stStatus(`Could not reach the model, so fill the axes by hand. ${r.reason || ""}`);
+        stStatus("Model unreachable. Fill the axes by hand.");
         return;
       }
       qa("#stAxes input").forEach((i) => {
@@ -334,7 +335,7 @@
       });
       const look = q("#stLook");
       if (look && !look.value.trim()) look.value = description;
-      stStatus("Suggested from what you wrote. Edit anything, then save. Nothing is stored yet.");
+      stStatus("Suggested. Edit, then save. Nothing is stored yet.");
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "Suggest axes"; }
     }
@@ -400,9 +401,9 @@
       <div>
         <div class="eyebrow">${clean(h.character)} knows · ${h.count}</div>
         ${h.told.length ? h.told.map(fact).join("")
-          : `<div class="empty">Nothing yet at this scene.</div>`}
+          : `<div class="empty">Nothing yet.</div>`}
         ${h.inferred.length ? `
-          <div class="eyebrow" style="margin-top:14px">And can reason to</div>
+          <div class="eyebrow" style="margin-top:14px">Can reason to</div>
           ${h.inferred.map(fact).join("")}` : ""}
       </div>
       <div>
@@ -412,7 +413,7 @@
             <div class="t">${clean(g.fact)}</div>
             <div class="tiny faint">known to ${clean((g.known_by || []).join(", "))}</div>
           </div>`).join("")
-          : `<div class="empty">Nothing is being kept from them at this scene.</div>`}
+          : `<div class="empty">Nothing is being kept from them.</div>`}
       </div>`;
     checkLine();
   }
@@ -436,8 +437,8 @@
     } catch { return; }
 
     box.innerHTML = v.ok
-      ? `<div class="hz-ok">Clean. Nothing in this line is outside what
-           ${clean(v.character)} knows by scene ${scene}.</div>`
+      ? `<div class="hz-ok">Clean · nothing here is outside what ${clean(v.character)}
+           knows by scene ${scene}.</div>`
       : `<div class="hz-bad">
            <b>${v.violations.length} knowledge violation${v.violations.length > 1 ? "s" : ""}.</b>
            ${v.violations.map((h) => `
@@ -474,9 +475,8 @@
       return;
     }
     if (!proposals.length) {
-      box.innerHTML = `<div class="faint tiny">
-        Nothing pending. Run the Archivist on a scene from the Bible tab and what
-        it infers lands here for you to accept.</div>`;
+      box.innerHTML = `<div class="faint tiny">Nothing pending. Run Propose facts on a scene and
+        what it infers lands here.</div>`;
       return;
     }
     box.innerHTML = proposals.map((p) => `
@@ -538,6 +538,31 @@
     }
   }
 
+  /* --------------------------------------------------------------- the tools */
+
+  /* One tool visible at a time. Each of the three is dense on its own, and three
+   * dense panels stacked is a wall you scroll past rather than read. The note
+   * beside the buttons is the only standing explanation, one line, changing with
+   * the tool, so nothing needs a paragraph under it. */
+  const NOTES = {
+    ctx: "The exact payload a model receives. Click a slot to read it, a chunk id for its source.",
+    horizon: "What a character knows by a scene. Drag the scene to move the boundary.",
+    style: "Asked once, reused verbatim in every image and every line.",
+  };
+
+  function tools() {
+    const seg = q("#toolSeg");
+    if (!seg) return;
+    const note = q("#toolNote");
+    const show = (name) => {
+      qa("#toolSeg button").forEach((b) => b.classList.toggle("on", b.dataset.t === name));
+      qa(".tool").forEach((p) => p.classList.toggle("on", p.dataset.t === name));
+      if (note) note.textContent = NOTES[name] || "";
+    };
+    qa("#toolSeg button").forEach((b) => b.onclick = () => show(b.dataset.t));
+    show("ctx");
+  }
+
   /* ------------------------------------------------------------------- boot */
 
   async function boot() {
@@ -546,6 +571,7 @@
     } catch {
       return;               // the shell reports the outage, no need to repeat it
     }
+    tools();
     drawLocations();
     fillScenes();
     castChips();

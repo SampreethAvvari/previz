@@ -35,39 +35,35 @@ from app.store import store
 # because "palette" produces a blank stare and "what colours does this film live
 # in" produces an answer.
 AXES: list[dict] = [
-    {"key": "medium",
-     "question": "What kind of images is this? Live action, animation, pencil "
-                 "boards, something else.",
-     "hint": "photorealistic cinematic film still, 35mm",
-     "why": "The strongest single lever on every frame. Left unsaid, the model "
-            "drifts between photoreal and illustration between shots."},
-    {"key": "palette",
+    {"key": "medium", "label": "Medium",
+     "question": "What kind of images is this?",
+     "hint": "photorealistic film still, 35mm",
+     "why": "The strongest lever on every frame. Unsaid, the model drifts "
+            "between photoreal and illustration."},
+    {"key": "palette", "label": "Palette",
      "question": "What colours does this film live in?",
-     "hint": "sodium vapour orange against wet blue-black",
-     "why": "Named colours carry across every shot. Unnamed ones do not survive "
-            "a scene change."},
-    {"key": "light",
-     "question": "Where does the light come from, and how hard is it?",
-     "hint": "practical sources only, fluorescent overheads, no fill",
+     "hint": "sodium vapour orange on wet blue-black",
+     "why": "Named colours carry across shots. Unnamed ones do not."},
+    {"key": "light", "label": "Light",
+     "question": "Where does light come from, and how hard is it?",
+     "hint": "practicals only, fluorescent, no fill",
      "why": "Light is what makes two shots feel like one film."},
-    {"key": "lens",
+    {"key": "lens", "label": "Lens",
      "question": "How close does the camera stand, and on what glass?",
-     "hint": "35mm and 50mm, shallow depth, no long lenses",
+     "hint": "35mm and 50mm, shallow",
      "why": "Focal length decides how the audience sits with a character."},
-    {"key": "mood",
-     "question": "What does this film feel like before anyone speaks?",
-     "hint": "held breath, small rooms, fluorescent light",
-     "why": "Reaches the dialogue as well as the images. This is the axis the "
-            "writing agents lean on hardest."},
-    {"key": "era",
+    {"key": "mood", "label": "Mood",
+     "question": "What does it feel like before anyone speaks?",
+     "hint": "held breath, small rooms",
+     "why": "Reaches the dialogue as well as the images."},
+    {"key": "era", "label": "Era",
      "question": "When is it?",
      "hint": "present day",
-     "why": "Fixes wardrobe, cars, phones and signage without anyone listing "
-            "them."},
-    {"key": "aspect",
+     "why": "Fixes wardrobe, cars and signage without listing them."},
+    {"key": "aspect", "label": "Aspect",
      "question": "What shape is the frame?",
      "hint": "2.39:1",
-     "why": "Composition is built to the frame, so changing it later reframes "
+     "why": "Composition is built to the frame, so changing it reframes "
             "every shot."},
 ]
 
