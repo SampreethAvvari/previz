@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=1280">
 <title>Magic Hour</title>
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/bible.css">
 </head>
 <body>
 
@@ -74,10 +75,39 @@
           <div id="spine" class="tiny muted"></div>
         </div>
       </div>
+      <!-- The Context Inspector. Every generated line in this product comes out
+           of one assembled Continuity Pack, so this is where a wrong line gets
+           traced to the fact behind it rather than argued about. -->
+      <div class="panel lit pad" style="margin-bottom:20px">
+        <div class="eyebrow">Context Inspector · the exact payload a model receives</div>
+        <div class="ci-controls">
+          <div>
+            <label class="lab">Scene</label>
+            <select class="f" id="ciScene"></select>
+          </div>
+          <div>
+            <label class="lab">Retrieval query</label>
+            <input class="f" id="ciQuery" placeholder="what does Ravi know about the route">
+          </div>
+          <button class="act" id="ciRun">Assemble</button>
+        </div>
+        <div class="ci-cast" id="ciCast"></div>
+        <div class="tiny faint" style="margin-top:9px">
+          Fixed slots, fixed budgets, assembled by one function for every call in
+          the product. On overflow the pack drops turn, then local, then
+          retrieved, and never style or cast, because those are the identity.
+          Click a slot to read it verbatim, and a chunk id to open the row it came
+          from.
+        </div>
+        <div id="ciOut"></div>
+      </div>
+
       <div class="eyebrow">Scenes</div>
       <div class="grid cards" id="sceneCards" style="margin-bottom:20px"></div>
       <div class="eyebrow">Characters</div>
-      <div class="grid cards" id="charCards"></div>
+      <div class="grid cards" id="charCards" style="margin-bottom:20px"></div>
+      <div class="eyebrow">Locations</div>
+      <div class="grid cards" id="bibleLocs"></div>
     </section>
 
     <!-- Script ------------------------------------------------------------ -->
@@ -228,5 +258,6 @@
 </div>
 
 <script src="/static/app.js"></script>
+<script src="/static/bible.js"></script>
 </body>
 </html>

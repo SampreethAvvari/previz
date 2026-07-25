@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.bible import build_pack, index, reindex_entity, reindex_story
+from app.bible import BUDGETS, build_pack, index, reindex_entity, reindex_story
 from app.store import scene_json, store, story_json
 
 router = APIRouter()
@@ -87,12 +87,61 @@ def context(q: str = "", story_id: str | None = None,
             scene: int | None = None, character_ids: str = ""):
     """Preview exactly what a model call would receive. This is the Context tab,
     and it is the fastest way to find out why a generation went wrong.
+
+    The retrieved chunks come back in full, not as a list of ids. A panel that
+    shows `c0037` and makes the reader go and look it up is a panel nobody reads
+    twice, and the whole value of this endpoint is that a bad line is traced to
+    the fact behind it in one glance rather than in three clicks.
     """
     sid = _sid(story_id)
     ids = [i for i in character_ids.split(",") if i]
     pack = build_pack(sid, query=q, character_ids=ids or None,
                       scene_number=scene)
-    return {"report": pack.report(), "slots": pack.slots, "text": pack.text()}
+    return {"report": pack.report(), "slots": pack.slots, "text": pack.text(),
+            # The budgets ship with the pack so the panel can draw a slot against
+            # its ceiling. Hardcoding them in the client would let the two drift,
+            # and a meter that reads full when the slot is half used is worse than
+            # no meter.
+            "budgets": BUDGETS,
+            "chunks": [index.chunks[c].json() for c in pack.chunk_ids
+                       if c in index.chunks]}
+
+
+@router.get("/bible/chunks/{cid}")
+def chunk(cid: str, story_id: str | None = None):
+    """One chunk with the row it was derived from.
+
+    Chunks are DERIVED (§4.1). So the interesting question about any chunk is
+    never "what does it say", it is "what wrote it, and is that thing canon". This
+    resolves `source_ref` into the actual entity, which is what makes a chunk id
+    in the Context panel a link rather than a label.
+    """
+    sid = _sid(story_id)
+    ch = index.chunks.get(cid)
+    if not ch or ch.story_id != sid:
+        raise HTTPException(404, f"no such chunk: {cid}")
+    st = store.story(sid)
+
+    source: dict = {"kind": ch.entity_type, "ref": ch.source_ref}
+    if ch.entity_type == "character" and ch.entity_id in st.characters:
+        c = st.characters[ch.entity_id]
+        source.update(name=c.name, role=c.role, canon_version=c.canon_version,
+                      answers=len(c.answers), tab="cast")
+    elif ch.entity_type == "scene" and ch.entity_id in st.scenes:
+        s = st.scenes[ch.entity_id]
+        source.update(name=s.slugline, number=s.number, status=s.status,
+                      synopsis=s.synopsis, tab="script")
+    elif ch.entity_type == "location" and ch.entity_id in st.locations:
+        l = st.locations[ch.entity_id]
+        source.update(name=l.name, address=l.address,
+                      shortlisted=l.shortlisted, tab="scout")
+    elif ch.entity_type in ("story", "style"):
+        source.update(name=st.title, tab="bible")
+    elif ch.entity_type == "edge":
+        source.update(name="story graph", tab="bible")
+
+    return {**ch.json(), "embedded": ch.embedding is not None,
+            "source": source}
 
 
 @router.get("/scenes/{number}")
