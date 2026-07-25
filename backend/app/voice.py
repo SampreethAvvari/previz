@@ -155,6 +155,32 @@ def compile_voice_card(name: str, answers: dict[str, str],
     return vc
 
 
+# thinking_budget=0 for two reasons. Practically: 2.5-flash is a thinking model,
+# and with a small max_output_tokens the reasoning tokens consume the entire budget
+# and the line comes back truncated mid-word ("Arre, boss, I"). Artistically:
+# dialogue should be instinctive, not reasoned. A character does not deliberate
+# before speaking, and lines written after visible deliberation read like it.
+#
+# The field only exists from google-genai 1.10 or so. The venv here is on 1.2.0,
+# whose ThinkingConfig takes include_thoughts and nothing else, and passing an
+# unknown field raises a pydantic ValidationError BEFORE the call goes out, which
+# took down every generated line. So it is probed once at import rather than
+# assumed. When it is unavailable the model thinks, so the token ceiling goes up
+# to leave room for reasoning plus a whole line, which is the mitigation
+# CLAUDE.md already prescribes for the same failure on 2.5-pro.
+_HAS_THINKING_BUDGET = "thinking_budget" in types.ThinkingConfig.model_fields
+
+
+def _speech_config() -> "types.GenerateContentConfig":
+    kw: dict = {"safety_settings": _SAFETY, "temperature": 1.0}
+    if _HAS_THINKING_BUDGET:
+        kw["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        kw["max_output_tokens"] = 400
+    else:
+        kw["max_output_tokens"] = 2048
+    return types.GenerateContentConfig(**kw)
+
+
 def speak(card: VoiceCard, scene: str, knows: list[str], state: str = "",
           heard: list[str] | None = None) -> str:
     """One line from one character. One call, one line."""
@@ -163,18 +189,7 @@ def speak(card: VoiceCard, scene: str, knows: list[str], state: str = "",
     resp = _client().models.generate_content(
         model=VOICE_MODEL,
         contents=card.system_prompt(scene, knows, state) + convo,
-        config=types.GenerateContentConfig(
-            safety_settings=_SAFETY,
-            temperature=1.0,
-            # thinking_budget=0 for two reasons. Practically: 2.5-pro is a
-            # thinking model, and with a small max_output_tokens the reasoning
-            # tokens consume the entire budget and the line comes back truncated
-            # mid-word ("Arre, boss, I"). Artistically: dialogue should be
-            # instinctive, not reasoned. A character does not deliberate before
-            # speaking, and lines written after visible deliberation read like it.
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-            max_output_tokens=400,
-        ),
+        config=_speech_config(),
     )
     line = (resp.text or "").strip().strip('"').strip()
     # Strip a leading character name if the model slipped one in despite the brief.
