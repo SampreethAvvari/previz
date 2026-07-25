@@ -54,11 +54,28 @@ let PICKED = null;      // selected character id, Cast surface
 
 /* ------------------------------------------------------------------ transport */
 
+/* The Google ID token, held in memory only.
+ *
+ * Not in localStorage on purpose. A token in localStorage is readable by any
+ * script on the page and survives the tab, which is a worse trade than asking
+ * Google for a fresh one on reload. Google Identity Services re-issues silently
+ * for an already signed in user, so the reload cost is invisible. */
+let TOKEN = null;
+let ME = null;
+
+function authHeaders(hasBody) {
+  const h = {};
+  if (hasBody) h["Content-Type"] = "application/json";
+  if (TOKEN) h.Authorization = `Bearer ${TOKEN}`;
+  return h;
+}
+
 async function api(path, opts) {
   const r = await fetch("/api" + path, {
     ...opts,
-    headers: opts?.body ? { "Content-Type": "application/json" } : undefined,
+    headers: authHeaders(Boolean(opts?.body)),
   });
+  if (r.status === 401) { signedOut(); throw new Error("sign in required"); }
   if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 300)}`);
   return r.json();
 }
@@ -68,9 +85,10 @@ async function sse(path, body, on = {}) {
   trace("run", "starting", "think");
   const r = await fetch("/api" + path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(true),
     body: JSON.stringify(body || {}),
   });
+  if (r.status === 401) { signedOut(); trace("error", "sign in required", "err"); return; }
   if (!r.ok) { trace("error", `${r.status} ${await r.text()}`, "err"); return; }
   const rd = r.body.getReader(), dec = new TextDecoder();
   let buf = "";
@@ -561,9 +579,73 @@ async function health() {
   } catch { $("#healthname").textContent = "backend unreachable"; }
 }
 
+/* ------------------------------------------------------------------ sign in */
+
+/* Google Identity Services, loaded on demand. No password ever reaches this app
+ * and none is stored: Google issues a signed ID token, the server verifies it
+ * against Google's public keys, and the `sub` claim is the user id. There is no
+ * session table and nothing to forge. */
+function gate(show, msg) {
+  $("#gate").style.display = show ? "grid" : "none";
+  if (msg) $("#gateMsg").textContent = msg;
+}
+
+function signedOut() {
+  TOKEN = null; ME = null;
+  gate(true, "Your session expired. Sign in again to continue.");
+}
+
+function loadGis() {
+  return new Promise((ok, no) => {
+    if (window.google?.accounts?.id) return ok();
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.onload = ok;
+    s.onerror = () => no(new Error("could not reach Google Identity Services"));
+    document.head.append(s);
+  });
+}
+
+async function startAuth(cfg) {
+  await loadGis();
+  google.accounts.id.initialize({
+    client_id: cfg.client_id,
+    callback: async (resp) => {
+      TOKEN = resp.credential;
+      try {
+        ME = await api("/auth/me");
+      } catch (e) { gate(true, String(e.message || e)); return; }
+      gate(false);
+      drawMe();
+      await start();
+    },
+    auto_select: true,               // returning users land straight in
+    cancel_on_tap_outside: false,
+  });
+  google.accounts.id.renderButton($("#gbtn"),
+    { theme: "filled_black", size: "large", shape: "pill",
+      text: "signin_with", logo_alignment: "left" });
+  // One tap for anyone already signed in to Google in this browser.
+  google.accounts.id.prompt();
+}
+
+function drawMe() {
+  const box = $("#who");
+  if (!ME || ME.local) { box.innerHTML = ""; return; }
+  box.innerHTML =
+    `${ME.picture ? `<img src="${safeUrl(ME.picture)}" alt="">` : ""}
+     <span class="tiny">${esc(ME.name || ME.email)}</span>
+     <button class="act" id="signout" style="padding:3px 9px;font-size:11px">sign out</button>`;
+  $("#signout").onclick = () => {
+    google.accounts.id.disableAutoSelect();
+    signedOut();
+  };
+}
+
 /* ----------------------------------------------------------------------- boot */
 
-(async function boot() {
+async function start() {
   await load();
   health();
   budget();
@@ -572,4 +654,24 @@ async function health() {
   api("/bible/embed", { method: "POST" })
     .then((r) => { health(); trace("bible", `${r.embedded_total}/${r.total} chunks embedded`, "done"); })
     .catch(() => trace("bible", "embedding unavailable, search is lexical only", "viol"));
+}
+
+(async function boot() {
+  let cfg = { enabled: false };
+  try {
+    cfg = await (await fetch("/api/auth/config")).json();
+  } catch { /* auth routes unreachable: fall through to the open app */ }
+
+  if (!cfg.enabled) {
+    // No client id configured, so auth is off and the app runs as one local user.
+    // Deliberate: a half configured login must not be why nothing works.
+    gate(false);
+    return start();
+  }
+  gate(true, "Sign in with Google to continue.");
+  try {
+    await startAuth(cfg);
+  } catch (e) {
+    gate(true, `${e.message}. Check your connection and reload.`);
+  }
 })();

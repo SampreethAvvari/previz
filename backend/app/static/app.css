@@ -364,6 +364,44 @@ label.lab {
 .lay.canon { color: var(--ok); }
 .lay.draft { color: var(--warn); }
 
+/* ------------------------------------------------------------- the sign in gate */
+
+#gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  place-items: center;
+  background: rgba(4, 5, 8, 0.82);
+  backdrop-filter: blur(22px);
+}
+.gatecard {
+  width: 388px;
+  padding: 40px 34px 32px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-top-color: rgba(245, 165, 36, 0.42);
+  border-radius: 17px;
+  background: linear-gradient(#0D0E13, #0A0B0F);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6),
+              0 0 70px rgba(245, 165, 36, 0.07);
+  animation: rise 320ms var(--ease);
+}
+.gatecard h2 {
+  font: 500 21px/1 var(--ui);
+  letter-spacing: -0.02em;
+  margin-bottom: 9px;
+}
+.gatecard p { margin-bottom: 20px; line-height: 1.5; }
+#gbtn { display: flex; justify-content: center; min-height: 44px; }
+
+#who { display: flex; align-items: center; gap: 7px; }
+#who img {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line-bright);
+}
+
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.11); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
