@@ -1,0 +1,284 @@
+/* Magic Hour · the character builder.
+ *
+ * The 100 questions, and the only input both card compilers need. Everything in
+ * here produces one thing: a flat {question_text: answer} dict. That is the
+ * contract with app/consistency.py and app/voice.py, so this file is free to
+ * change how it asks without touching anything downstream.
+ *
+ * Two ways through the same 100. Interview walks them one at a time, core first,
+ * because the 12 core answers are what unlock a face and a voice and nothing else
+ * is worth doing until they exist. All 100 shows every part at once, because a
+ * writer who already knows this person wants to type into the four fields they
+ * care about and leave, not answer twelve questions to get to the thirteenth.
+ *
+ * Unsaved answers are held here and never partially written: one PUT per save,
+ * because each write bumps canon_version and stales both compiled cards, so
+ * saving one field at a time would recompile a character eight times to fill in
+ * one part.
+ */
+
+const BQ = {};                 // question id -> question, filled on open
+let IV = null;                 // the interview payload
+let BCID = null;               // character id
+let BMODE = "interview";
+let BPART = null;              // open part in All 100 mode
+let BI = 0;                    // interview cursor
+let DIRTY = {};                // question text -> unsaved answer
+let DRAFTS = {};               // question text -> model draft, unaccepted
+
+/* Core first, then the rest in file order. The same policy the server uses in
+ * questions.next_unanswered, kept here so prev and next can walk backwards too. */
+function bqueue() {
+  const all = IV.parts.flatMap((p) => p.questions);
+  return [...all.filter((q) => q.is_core), ...all.filter((q) => !q.is_core)];
+}
+
+function bval(q) {
+  return DIRTY[q.text] ?? DRAFTS[q.text] ?? q.answer ?? "";
+}
+
+const bpct = (a, b) => (b ? Math.round(a / b * 100) : 0);
+
+window.Builder = {
+  async open(ch) {
+    BCID = ch.id;
+    IV = await api(`/characters/${ch.id}/interview`);
+    for (const p of IV.parts) for (const q of p.questions) BQ[q.id] = q;
+    if (BPART === null) BPART = IV.parts[0].key;
+    // Land on the first thing that still needs an answer, not on question one,
+    // which is almost always already answered and teaches nothing.
+    const q = bqueue();
+    if (!Object.keys(DIRTY).length) BI = Math.max(0, q.findIndex((x) => !bval(x)));
+    Builder.draw();
+  },
+  draw,
+};
+
+function draw() {
+  const p = IV.progress;
+  const ch = IV.character;
+  const unsaved = Object.keys(DIRTY).length;
+  $("#castWho").textContent = ch.name;
+  $("#castDetail").innerHTML = `
+    <div class="panel lit pad bd-head">
+      <div class="bd-row">
+        <button class="act primary" id="btnCompile">Compile cards</button>
+        <button class="act" id="btnCast">Cast · sheet and fingerprint</button>
+        <span class="chip ${p.ready_for_dialogue ? "ok" : "warn"}">
+          ${p.core_done} of 12 core</span>
+        <span class="chip">${p.answered} of 100</span>
+        <span class="chip ${unsaved ? "warn" : ""}" id="bdUnsaved"
+          style="${unsaved ? "" : "display:none"}">${unsaved} unsaved</span>
+        <button class="act ${unsaved ? "primary" : ""}" id="bdSaveAll"
+          ${unsaved ? "" : "disabled"}>Save</button>
+      </div>
+      ${gate()}
+      <div class="bd-parts">
+        ${IV.parts.map((pt) => {
+          const v = p.by_part[pt.key];
+          return `<button class="bd-part ${pt.key === BPART ? "on" : ""}" data-p="${pt.key}">
+            <div class="meter"><i style="width:${bpct(v.done, v.total)}%"></i></div>
+            <div class="tiny faint">${esc(v.label)}</div>
+            <div class="tiny mono faint">${v.done}/${v.total}</div>
+          </button>`;
+        }).join("")}
+      </div>
+    </div>
+
+    <div class="panel pad bd-draft">
+      <div class="bd-row">
+        <input class="f" id="bdPremise" placeholder="one line about who this person is: a night bus driver who never tells anyone she was a pianist"
+          value="${esc(IV.premise || "")}">
+        <button class="act" id="bdDraft">Draft the unanswered core</button>
+      </div>
+      <div class="tiny faint" style="margin-top:8px">
+        Drafts land in the fields for you to edit, and nothing is written until you
+        save. An answer the model invented and stored silently would become canon
+        nobody decided, and every face and every line after it would be built on it.
+      </div>
+    </div>
+
+    <div class="bd-modes">
+      <button class="${BMODE === "interview" ? "on" : ""}" data-m="interview">Interview</button>
+      <button class="${BMODE === "all" ? "on" : ""}" data-m="all">All 100</button>
+    </div>
+
+    ${BMODE === "interview" ? interview() : allHundred()}
+
+    ${ch.identity_card ? cardPanel(
+      "Identity Card · frozen, pasted verbatim into every image prompt", [
+      ["descriptor", ch.identity_card.descriptor],
+      ["wardrobe", ch.identity_card.wardrobe],
+      ["never", ch.identity_card.negative]], ch.sheet_url) : ""}
+    ${ch.voice_card ? cardPanel(
+      "Voice Card · frozen, injected verbatim into her sub-agent", [
+      ["how she speaks", ch.voice_card.card],
+      ["says", (ch.voice_card.phrases || []).join(" · ")],
+      ["never says", (ch.voice_card.never_says || []).join(" · ")],
+      ["samples", (ch.voice_card.samples || []).map((s) => `"${s}"`).join("\n")],
+      ...Object.entries(ch.voice_card.register || {})]) : ""}`;
+  wire();
+}
+
+/* The gate. Twelve dots, one per core question, because "5 of 12" tells you how
+ * far you are and this tells you which ones are missing and lets you go there. */
+function gate() {
+  const core = bqueue().filter((q) => q.is_core);
+  return `<div class="bd-gate">
+    ${core.map((q) => {
+      const has = Boolean(bval(q).trim());
+      return `<button class="bd-dot ${has ? "on" : ""} ${DIRTY[q.text] ? "new" : ""}"
+        data-q="${q.id}" title="${esc(q.text)}"></button>`;
+    }).join("")}
+    <span class="tiny faint" style="margin-left:8px">
+      ${IV.progress.ready_for_dialogue
+        ? "all 12 core answered, this character can speak"
+        : "the 12 core answers are what compile a voice. Click a dot to answer it."}
+    </span>
+  </div>`;
+}
+
+function interview() {
+  const q = bqueue()[BI];
+  if (!q) return `<div class="empty">All 100 answered.</div>`;
+  const n = bqueue().filter((x) => bval(x).trim()).length;
+  return `
+    <div class="panel lit pad bd-one">
+      <div class="bd-qmeta">
+        <span class="chip ${q.is_core ? "warn" : ""}">${q.is_core ? "core" : esc(q.part_label)}</span>
+        <span class="tiny faint mono">question ${q.id} of 100 · ${n} answered</span>
+        <span class="tiny faint" style="margin-left:auto">
+          ${DRAFTS[q.text] ? "drafted, not saved" : q.answer ? "answered" : ""}</span>
+      </div>
+      <div class="bd-q">${esc(q.text)}</div>
+      <textarea class="f ans ${DRAFTS[q.text] ? "draft" : ""}" data-q="${q.id}"
+        rows="4" placeholder="in their own words, first person">${esc(bval(q))}</textarea>
+      <div class="bd-row" style="margin-top:11px">
+        <button class="act" id="bdPrev" ${BI ? "" : "disabled"}>Back</button>
+        <button class="act primary" id="bdNext">Save and next</button>
+        <button class="act" id="bdSkip">Skip</button>
+        <span class="tiny faint">Ctrl or Cmd and Enter saves and moves on.</span>
+      </div>
+    </div>`;
+}
+
+function allHundred() {
+  const pt = IV.parts.find((p) => p.key === BPART) || IV.parts[0];
+  return `
+    <div class="panel pad">
+      <div class="eyebrow">${esc(pt.label)} · ${pt.count} questions, ${pt.core_count} core</div>
+      ${pt.questions.map((q) => `
+        <div class="bd-item ${bval(q).trim() ? "done" : ""}">
+          <div class="bd-ilab">
+            <span class="tiny mono faint">${q.id}</span>
+            ${q.is_core ? `<span class="chip warn">core</span>` : ""}
+          </div>
+          <div style="flex:1">
+            <div class="tiny" style="margin-bottom:6px">${esc(q.text)}</div>
+            <textarea class="f ans ${DRAFTS[q.text] ? "draft" : ""}" data-q="${q.id}"
+              rows="2" placeholder="·">${esc(bval(q))}</textarea>
+          </div>
+        </div>`).join("")}
+    </div>`;
+}
+
+/* ---------------------------------------------------------------- interaction */
+
+function wire() {
+  $$("#castDetail .ans").forEach((t) => {
+    t.oninput = () => {
+      const q = BQ[t.dataset.q];
+      const v = t.value;
+      if (v === (q.answer || "")) delete DIRTY[q.text];
+      else DIRTY[q.text] = v;
+      delete DRAFTS[q.text];
+      t.classList.remove("draft");
+      const n = Object.keys(DIRTY).length;
+      const chip = $("#bdUnsaved");
+      chip.textContent = `${n} unsaved`;
+      chip.style.display = n ? "" : "none";
+      $("#bdSaveAll").disabled = !n;
+      $("#bdSaveAll").classList.toggle("primary", Boolean(n));
+    };
+    t.onkeydown = (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        BMODE === "interview" ? step(1, true) : save();
+      }
+    };
+  });
+
+  $$("#castDetail .bd-part").forEach((b) => b.onclick = () => {
+    BPART = b.dataset.p; BMODE = "all"; draw();
+  });
+  $$("#castDetail .bd-modes button").forEach((b) => b.onclick = () => {
+    BMODE = b.dataset.m; draw();
+  });
+  $$("#castDetail .bd-dot").forEach((b) => b.onclick = () => {
+    BMODE = "interview";
+    BI = bqueue().findIndex((q) => q.id === +b.dataset.q);
+    draw();
+  });
+
+  const nx = $("#bdNext");
+  if (nx) {
+    nx.onclick = () => step(1, true);
+    $("#bdSkip").onclick = () => step(1, false);
+    $("#bdPrev").onclick = () => step(-1, false);
+  }
+  $("#bdSaveAll").onclick = save;
+  $("#bdDraft").onclick = drafting;
+  $("#btnCompile").onclick = () => run("compile");
+  $("#btnCast").onclick = () => run("cast");
+}
+
+async function step(d, saveFirst) {
+  if (saveFirst && Object.keys(DIRTY).length) { await save(); return; }
+  BI = Math.min(bqueue().length - 1, Math.max(0, BI + d));
+  draw();
+  $("#castDetail .ans")?.focus();
+}
+
+/* One PUT for everything unsaved. The server merges, bumps canon_version once and
+ * stales both cards once, which is the whole reason answers are batched. */
+async function save() {
+  const answers = {};
+  for (const [k, v] of Object.entries(DIRTY)) if (v.trim()) answers[k] = v.trim();
+  if (!Object.keys(answers).length) { DIRTY = {}; draw(); return; }
+  $("#bdSaveAll").disabled = true;
+  await api(`/characters/${BCID}/answers`,
+    { method: "PUT", body: JSON.stringify({ answers }) });
+  DIRTY = {};
+  trace("answers", `${Object.keys(answers).length} saved · canon bumped`, "done");
+  await load();                        // the cards and the bible both move
+  IV = await api(`/characters/${BCID}/interview`);
+  for (const p of IV.parts) for (const q of p.questions) BQ[q.id] = q;
+  if (BMODE === "interview") {
+    const q = bqueue();
+    const at = q.findIndex((x) => !bval(x));
+    if (at >= 0) BI = at;
+  }
+  draw();
+}
+
+async function drafting() {
+  const btn = $("#bdDraft");
+  btn.disabled = true;
+  IV.premise = $("#bdPremise").value.trim();
+  $$("#itabs button")[1].click();
+  await sse(`/characters/${BCID}/draft`,
+    { premise: IV.premise, part: BMODE === "all" ? BPART : null },
+    { data: (e) => { DRAFTS = { ...DRAFTS, ...(e.drafts || {}) }; } });
+  btn.disabled = false;
+  draw();
+}
+
+async function run(what) {
+  const btn = what === "compile" ? $("#btnCompile") : $("#btnCast");
+  btn.disabled = true;
+  $$("#itabs button")[1].click();
+  await sse(`/characters/${BCID}/${what}`, {}, {
+    run_end: async () => { await load(); await Builder.open(IV.character); },
+  });
+  btn.disabled = false;
+}
