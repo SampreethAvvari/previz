@@ -26,9 +26,24 @@ from google.genai import types
 from app.consistency import (LOCATION, PROJECT, TEXT_MODEL, _SAFETY, _access_token,
                              _client, cosine)
 
-REASONING_MODEL = "gemini-2.5-pro"
+REASONING_MODEL = "gemini-2.5-pro"     # compiling cards: reasoning earns its keep
+# Speaking a line: gemini-2.5-flash, because it is the only one of the two that
+# accepts thinking_budget=0 (Pro always thinks and returns 400 on 0), and because
+# a character does not deliberate before speaking.
+VOICE_MODEL = "gemini-2.5-flash"
 EMBED_TEXT = "text-embedding-005"          # 768 dims, verified on this project
-VOICE_THRESHOLD = 0.55                     # calibrate with calibrate_voice()
+# Calibrated 2026-07-25 on real generated lines, not on sample-vs-own-centroid.
+# That distinction matters: calibrate_voice() scores each sample against a
+# centroid the sample is itself part of, which inflates it to 0.77 and would set
+# the bar above anything real. Measured instead:
+#
+#   generated Maya lines vs Maya fingerprint:  0.715  0.827  0.806
+#   generated Ravi lines vs Ravi fingerprint:  0.682  0.647  0.684
+#   best cross-character sample score:         0.613
+#
+# 0.62 sits between the best cross-character score and the worst genuine
+# generated line. Re-derive from a bigger sample before trusting it further.
+VOICE_THRESHOLD = 0.62
 
 # The 12 core interview questions. Fewer than these answered and we refuse to
 # write dialogue rather than inventing a person.
@@ -146,12 +161,27 @@ def speak(card: VoiceCard, scene: str, knows: list[str], state: str = "",
     convo = ("\n\nWHAT HAS BEEN SAID SO FAR IN THIS SCENE:\n"
              + "\n".join(heard) if heard else "")
     resp = _client().models.generate_content(
-        model=REASONING_MODEL,
+        model=VOICE_MODEL,
         contents=card.system_prompt(scene, knows, state) + convo,
         config=types.GenerateContentConfig(
-            safety_settings=_SAFETY, temperature=1.0, max_output_tokens=200),
+            safety_settings=_SAFETY,
+            temperature=1.0,
+            # thinking_budget=0 for two reasons. Practically: 2.5-pro is a
+            # thinking model, and with a small max_output_tokens the reasoning
+            # tokens consume the entire budget and the line comes back truncated
+            # mid-word ("Arre, boss, I"). Artistically: dialogue should be
+            # instinctive, not reasoned. A character does not deliberate before
+            # speaking, and lines written after visible deliberation read like it.
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            max_output_tokens=400,
+        ),
     )
-    return (resp.text or "").strip().strip('"')
+    line = (resp.text or "").strip().strip('"').strip()
+    # Strip a leading character name if the model slipped one in despite the brief.
+    prefix = f"{card.name.upper()}:"
+    if line.upper().startswith(prefix):
+        line = line[len(prefix):].strip()
+    return line
 
 
 @dataclass
@@ -180,9 +210,26 @@ def write_exchange(cards: list[VoiceCard], scene: str,
     from its own card only, and hears only what has actually been said out loud.
     No single agent holds every character, which is what makes the voices
     genuinely separate rather than one model doing impressions.
+
+    CRITICAL, and this was found by it going wrong: `scene` is shared with every
+    sub-agent, so it must contain NOTHING that any character in it does not know.
+    Put secrets in `knows` for the character who holds them, never in `scene`.
+
+    A first run used the scene brief "Maya already knew, and did not tell him."
+    Ravi's `knows` list deliberately omitted that. He accused her of it anyway,
+    on his third line, because he read it in the shared brief. The knowledge
+    horizon is only as tight as the scene description around it.
+
+    `scene` is what a camera in the room could see. Everything else is per
+    character.
     """
     if not cards:
         return []
+    leaked = _check_scene_for_secrets(scene, knows)
+    if leaked:
+        # Loud rather than silent: a leaked secret produces dialogue that looks
+        # fine and is wrong, which is the most expensive kind of bug here.
+        print(f"  WARNING: scene brief may leak private knowledge: {leaked}")
     states = states or {}
     heard: list[str] = []
     out: list[dict] = []
@@ -204,6 +251,33 @@ def write_exchange(cards: list[VoiceCard], scene: str,
                     "score": v.score, "passed": v.passed, "reason": v.reason,
                     "canon_version": card.canon_version})
     return out
+
+
+def _check_scene_for_secrets(scene: str, knows: dict[str, list[str]]) -> list[str]:
+    """Warn when the shared scene brief states something only one character knows.
+
+    Cheap heuristic, not a proof: for each character, look for a fact that is in
+    someone else's `knows` list, absent from theirs, and whose distinctive words
+    appear in the scene text. Catches the obvious case, which is the one that
+    actually happens.
+    """
+    STOP = {"the", "a", "an", "is", "was", "has", "have", "and", "or", "of", "to",
+            "in", "on", "at", "for", "it", "he", "she", "they", "her", "him",
+            "his", "not", "did", "does", "been", "being", "that", "this", "with"}
+    low = scene.lower()
+    hits: list[str] = []
+    for owner, facts in knows.items():
+        for other in knows:
+            if other == owner:
+                continue
+            for fact in facts:
+                if fact in knows[other]:
+                    continue
+                words = {w.strip(".,'\"") for w in fact.lower().split()
+                         if len(w) > 4 and w not in STOP}
+                if words and len(words & set(low.split())) >= max(2, len(words) // 3):
+                    hits.append(f"{other} may learn from the brief: {fact[:60]}")
+    return hits
 
 
 def calibrate_voice(cards: list[VoiceCard]) -> dict:

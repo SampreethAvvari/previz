@@ -1,0 +1,132 @@
+{
+  "scene": "INT. BUS DEPOT OFFICE - 4 AM. Maya is closing out the night shift. Ravi comes in off his last route, soaked from the rain. He has just found out the depot is cutting the night route entirely. Maya already knew, and did not tell him.",
+  "calibration": {
+    "worst_same": 0.7698294793622462,
+    "best_cross": 0.5949040060013517,
+    "gap": 0.17492547336089448,
+    "suggested_threshold": 0.682366742681799,
+    "separable": true,
+    "n_same": 8,
+    "n_cross": 8
+  },
+  "lines": [
+    {
+      "character": "Maya Raghavan",
+      "line": "Is that what you think?",
+      "score": 0.715094643930336,
+      "passed": true,
+      "reason": "sounds like them",
+      "canon_version": 1
+    },
+    {
+      "character": "Ravi Menon",
+      "line": "Arre, what is there to think, my friend, when it's written right here, plain as day, on this paper I'm holding, that after twenty-two years, twenty-two years without a single scratch on that bus, they are just\u2026 cutting it, just like that?",
+      "score": 0.6820029200722728,
+      "passed": true,
+      "reason": "sounds like them",
+      "canon_version": 1
+    },
+    {
+      "character": "Maya Raghavan",
+      "line": "It's fine. We'll proceed as planned.",
+      "score": 0.8272116224790397,
+      "passed": true,
+      "reason": "sounds like them",
+      "canon_version": 1
+    },
+    {
+      "character": "Ravi Menon",
+      "line": "Proceed as planned? Listen, listen, my friend, what plan is this, when my plan, my life\u2019s plan, for twenty-two years, has been driving that bus, every single night, and now\u2026 now there is no night route to drive, no night route, for Ravi Menon!",
+      "score": 0.6472155465514509,
+      "passed": true,
+      "reason": "sounds like them",
+      "canon_version": 1
+    },
+    {
+      "character": "Maya Raghavan",
+      "line": "The situation has been handled.",
+      "score": 0.8063153252653668,
+      "passed": true,
+      "reason": "sounds like them",
+      "canon_version": 1
+    },
+    {
+      "character": "Ravi Menon",
+      "line": "Handled? Arre, handled, you say, my friend, when a man finds out his whole life, his whole twenty-two years, is being cut, like some kind of old newspaper, and you knew about it, didn't you, boss, you knew, and you didn't say a word to old Ravi, not a single word!",
+      "score": 0.6842234646705128,
+      "passed": true,
+      "reason": "sounds like them",
+      "canon_version": 1
+    }
+  ],
+  "cards": [
+    {
+      "name": "Maya Raghavan",
+      "card": "Maya speaks in a low, unhurried tone, forcing others to listen closely. This vocal control is a direct result of immense guilt from a past failure\u2014missing her mother's death\u2014and she now maintains absolute command over herself to prevent any future lapse. Her quietness is not passivity; it is a weapon of control and a shield against the world.",
+      "register": {
+        "sentence_length": "Short and declarative. Uses fragments to end conversations. Avoids run-on sentences.",
+        "formality": "Formal and precise, even in casual settings. Creates distance through word choice.",
+        "profanity": "None. Cursing is an uncontained, emotional act.",
+        "hedging": "Never. She projects absolute certainty, even when being dishonest about her feelings.",
+        "humour": "Rare, dry, and ironic. Used to deflect or dismiss, never to connect.",
+        "silence": "A primary tool. Uses pauses to make others uncomfortable and assert control."
+      },
+      "phrases": [
+        "That's fine.",
+        "I'll handle it.",
+        "Sure.",
+        "Is that what you think?",
+        "Noted."
+      ],
+      "never_says": [
+        "I need help.",
+        "I was wrong.",
+        "I'm sorry.",
+        "Wow!",
+        "I don't know.",
+        "like",
+        "you know",
+        "I guess"
+      ],
+      "samples": [
+        "It's fine. We'll proceed as planned.",
+        "Why would you think I'm upset?",
+        "The situation has been handled.",
+        "Do you have a question or are you just thinking out loud?"
+      ]
+    },
+    {
+      "name": "Ravi Menon",
+      "card": "Ravi's loud, warm, and constant speech is a direct countermeasure to the solitude of his two decades as a night bus driver. He fills every silence because he fears being useless and forgotten, using his hoarse, booming voice to make a connection with everyone and prove he is still a vital part of the world. He talks over people not from arrogance, but from a desperate, restless need to engage before the moment is lost.",
+      "register": {
+        "sentence_length": "Variable. Long, run-on sentences to fill silence, but punctuated by short, emphatic phrases.",
+        "formality": "Consistently informal. Addresses everyone from strangers to superiors as 'boss' or 'my friend'.",
+        "profanity": "Almost never. Expresses frustration with interjections like 'Arre' rather than swearing.",
+        "hedging": "None. He is bluntly, often uncomfortably, direct about his thoughts and feelings.",
+        "humour": "Frequent and self-directed. He always laughs loudly at his own jokes before anyone else can.",
+        "silence": "Abhors it. Actively fills any conversational pause with words, questions, or laughter."
+      },
+      "phrases": [
+        "Listen, listen.",
+        "My friend.",
+        "Arre.",
+        "...boss."
+      ],
+      "never_says": [
+        "I'm not sure.",
+        "Let me think about that.",
+        "Perhaps...",
+        "With all due respect...",
+        "Sir/Ma'am",
+        "ambivalent",
+        "It wasn't my fault."
+      ],
+      "samples": [
+        "Arre, what is this? You look hungry, boss. No, no, don't argue, I have an extra tiffin, my wife always packs too much. Eat, eat!",
+        "Listen, listen\u2014sorry, sorry, I'm talking over you again, my friend, it's a bad habit. Go on, what were you saying?",
+        "Twenty-two years! [laughs loudly] Can you believe that, boss? Not one accident on the night route. That's a record, I am telling you.",
+        "Retirement? For who? A man who sits still is a man who is waiting to die. No, thank you. I have too much to do."
+      ]
+    }
+  ]
+}
