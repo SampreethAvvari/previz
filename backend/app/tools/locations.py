@@ -14,16 +14,17 @@ def find_locations(scene_description: str, region: str | None = None) -> list[Lo
         r = httpx.post(_URL, headers=headers, json={"textQuery": query, "maxResultCount": 3}, timeout=10)
         r.raise_for_status()
         places = r.json().get("places", [])
+        out = []
+        for p in places[:3]:
+            loc = p.get("location") or {}
+            pid = p.get("id", "")
+            name = (p.get("displayName") or {}).get("text", "Unknown")
+            out.append(LocationSuggestion(
+                name=name,
+                address=p.get("formattedAddress") or "",
+                lat=loc.get("latitude", 0.0), lng=loc.get("longitude", 0.0),
+                maps_url=f"https://www.google.com/maps/place/?q=place_id:{pid}",
+            ))
+        return out
     except Exception:
         return []
-    out = []
-    for p in places[:3]:
-        loc = p.get("location", {})
-        pid = p.get("id", "")
-        out.append(LocationSuggestion(
-            name=p.get("displayName", {}).get("text", "Unknown"),
-            address=p.get("formattedAddress", ""),
-            lat=loc.get("latitude", 0.0), lng=loc.get("longitude", 0.0),
-            maps_url=f"https://www.google.com/maps/place/?q=place_id:{pid}",
-        ))
-    return out

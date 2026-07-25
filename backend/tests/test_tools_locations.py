@@ -19,3 +19,9 @@ def test_find_locations_empty_on_error():
     respx.post("https://places.googleapis.com/v1/places:searchText").mock(
         return_value=httpx.Response(500))
     assert find_locations("x") == []
+
+@respx.mock
+def test_find_locations_empty_on_malformed_place():
+    respx.post("https://places.googleapis.com/v1/places:searchText").mock(
+        return_value=httpx.Response(200, json={"places": "not-a-list"}))
+    assert find_locations("x") == []
