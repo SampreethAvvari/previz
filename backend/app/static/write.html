@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Screenwriter · Magic Hour</title>
+<link rel="stylesheet" href="/static/app.css">
+<style>
+/* The Screenwriter surface. Three columns: the scenes, the page, the agents.
+ *
+ * The page is the only thing on screen allowed to look like paper. Everything
+ * else stays in the dark so the eye goes to the words, which is also why the AI
+ * panel never animates while you are typing.
+ *
+ * Element margins are NOT in this file. They are generated at runtime from
+ * /api/screenplay/grammar, so app/screenplay.py is the only definition of what a
+ * character cue looks like. See applyLayout() in write.js.
+ */
+#wrap { display: grid; grid-template-columns: 208px 1fr 372px; height: 100vh; }
+#wrap > * { min-width: 0; overflow: auto; }
+
+/* the scenes ------------------------------------------------------------- */
+#scenes { border-right: 1px solid var(--line); padding: 16px 12px; }
+#scenes .back { display: block; color: var(--ink-faint); font-size: 11px;
+  text-decoration: none; margin-bottom: 14px; letter-spacing: .04em; }
+#scenes .back:hover { color: var(--script); }
+.scene-btn { display: block; width: 100%; text-align: left; background: none;
+  border: 1px solid transparent; border-radius: 8px; color: var(--ink-dim);
+  padding: 9px 10px; margin-bottom: 3px; cursor: pointer; font: inherit;
+  font-size: 12px; line-height: 1.35; transition: all var(--t) var(--ease); }
+.scene-btn:hover { background: var(--panel); color: var(--ink); }
+.scene-btn.on { background: var(--panel); color: var(--ink);
+  border-color: color-mix(in srgb, var(--script) 45%, transparent); }
+.scene-btn .n { font: 600 10px var(--mono); color: var(--script);
+  letter-spacing: .08em; }
+.scene-btn .sl { display: block; margin-top: 2px; }
+
+/* the page --------------------------------------------------------------- */
+#center { display: flex; flex-direction: column; overflow: hidden; }
+#tools { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.tool { background: var(--panel); border: 1px solid var(--line); color: var(--ink-dim);
+  border-radius: 7px; padding: 6px 9px; font: 500 11px/1 system-ui, sans-serif;
+  cursor: pointer; transition: all var(--t) var(--ease); white-space: nowrap; }
+.tool:hover { color: var(--ink); border-color: var(--line-bright); }
+.tool.on { background: color-mix(in srgb, var(--script) 22%, transparent);
+  border-color: color-mix(in srgb, var(--script) 55%, transparent); color: var(--ink); }
+.tool .k { font: 500 9.5px var(--mono); color: var(--ink-faint); margin-left: 5px; }
+.tool.on .k { color: var(--ink-dim); }
+#toolsRight { margin-left: auto; display: flex; align-items: center; gap: 10px;
+  font: 500 11px var(--mono); color: var(--ink-faint); }
+#saved.dirty { color: var(--warn); }
+#saved.ok { color: var(--ok); }
+
+#paper { flex: 1; overflow: auto; padding: 34px 0 45vh; }
+#canvas { width: 65ch; margin: 0 auto; font: 400 14px/1.58 var(--mono);
+  color: #E9E9EE; outline: none; caret-color: var(--script); }
+#canvas .el { white-space: pre-wrap; word-wrap: break-word; position: relative; }
+#canvas .el:empty::after { content: attr(data-hint); color: var(--ink-faint);
+  pointer-events: none; }
+/* The type of the block you are in, in the left gutter. Nothing else in the
+ * editor tells you what element you are writing, and the writer needs to know
+ * before they type rather than after. */
+#canvas .el.here::before { content: attr(data-label); position: absolute;
+  left: -13ch; width: 12ch; text-align: right; font: 500 9.5px/1.9 var(--mono);
+  color: var(--script); letter-spacing: .06em; text-transform: uppercase;
+  opacity: .85; }
+#canvas .el.ai { background: color-mix(in srgb, var(--script) 9%, transparent);
+  box-shadow: -3px 0 0 color-mix(in srgb, var(--script) 60%, transparent); }
+
+/* the agents ------------------------------------------------------------- */
+#ai { border-left: 1px solid var(--line); padding: 14px; display: flex;
+  flex-direction: column; gap: 12px; }
+.who { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 9px; margin-bottom: 6px;
+  background: var(--panel); }
+.who .nm { font-size: 12px; color: var(--ink); flex: 1; }
+.who .st { font: 500 9.5px var(--mono); color: var(--ink-faint); }
+.who button { background: color-mix(in srgb, var(--script) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--script) 45%, transparent);
+  color: var(--ink); border-radius: 6px; padding: 5px 9px; font-size: 11px;
+  cursor: pointer; }
+.who button:disabled { opacity: .4; cursor: not-allowed; background: none; }
+#ai input.f { width: 100%; }
+.go { width: 100%; background: color-mix(in srgb, var(--script) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--script) 50%, transparent);
+  color: var(--ink); border-radius: 8px; padding: 8px; font-size: 12px;
+  cursor: pointer; margin-top: 7px; }
+.go:disabled { opacity: .45; cursor: not-allowed; }
+
+#trace { font: 400 10.5px/1.5 var(--mono); color: var(--ink-faint);
+  max-height: 190px; overflow: auto; }
+#trace .ev { padding: 4px 0; border-bottom: 1px solid var(--line); }
+#trace .ev .ag { color: var(--script); }
+#trace .ev.bad { color: var(--bad); }
+#trace .ev.ctx { color: var(--ink-dim); }
+
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 11px;
+  margin-bottom: 8px; background: var(--panel-solid); }
+.card .top { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+.card .ag { font: 500 9.5px var(--mono); color: var(--script); flex: 1;
+  letter-spacing: .04em; }
+.card .sc { font: 600 9.5px var(--mono); padding: 2px 6px; border-radius: 20px; }
+.card .sc.pass { color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 15%, transparent); }
+.card .sc.fail { color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 15%, transparent); }
+.card .txt { font: 400 12.5px/1.5 var(--mono); color: var(--ink);
+  white-space: pre-wrap; }
+.card .row { display: flex; gap: 6px; margin-top: 9px; }
+.card .row button { flex: 1; border-radius: 6px; padding: 6px; font-size: 11px;
+  cursor: pointer; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink-dim); }
+.card .row button.ins { background: color-mix(in srgb, var(--ok) 16%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent); color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div id="wrap">
+
+  <!-- the scenes ------------------------------------------------------- -->
+  <nav id="scenes">
+    <a class="back" href="/">← the rest of Magic Hour</a>
+    <div class="eyebrow">Scenes</div>
+    <div id="sceneList"></div>
+    <div class="eyebrow" style="margin-top:18px">This scene</div>
+    <div id="sceneMeta" class="tiny faint"></div>
+  </nav>
+
+  <!-- the page -------------------------------------------------------- -->
+  <div id="center">
+    <div id="tools">
+      <!-- filled from /api/screenplay/grammar, so the toolbar and the parser
+           cannot disagree about which elements exist -->
+      <div id="toolsRight">
+        <span id="pages">· pages</span>
+        <span id="saved">saved</span>
+      </div>
+    </div>
+    <div id="paper">
+      <div id="canvas" contenteditable="true" spellcheck="false"></div>
+    </div>
+  </div>
+
+  <!-- the agents ------------------------------------------------------ -->
+  <aside id="ai">
+    <div>
+      <div class="eyebrow">Character agents</div>
+      <div class="tiny faint" style="margin-bottom:8px">
+        One sub-agent per character, built from that character's frozen Voice Card
+        verbatim and bounded by what they know as of this scene. Each line is
+        scored against their own voice fingerprint.
+      </div>
+      <div id="cast"></div>
+    </div>
+
+    <div>
+      <div class="eyebrow">Action</div>
+      <input class="f" id="intent" placeholder="what this beat has to do">
+      <button class="go" id="btnAction">Write one action paragraph</button>
+      <div class="tiny faint" style="margin-top:6px">
+        One paragraph, never a scene. The limit is enforced by the response
+        schema, not by asking.
+      </div>
+    </div>
+
+    <div>
+      <div class="eyebrow">Live trace</div>
+      <div id="trace">Idle.</div>
+    </div>
+
+    <div style="flex:1">
+      <div class="eyebrow">Waiting for you</div>
+      <div class="tiny faint" style="margin-bottom:8px">
+        Nothing is written to the page until you insert it.
+      </div>
+      <div id="cards"></div>
+    </div>
+  </aside>
+
+</div>
+
+<script src="/static/write.js"></script>
+</body>
+</html>
