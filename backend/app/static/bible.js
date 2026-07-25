@@ -246,6 +246,94 @@
       <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
   }
 
+  /* -------------------------------------------------------- the Canon strip */
+
+  /* The shell already draws a strip with the agent and its reasoning. This
+   * replaces it with one that also shows WHAT you are being asked to accept and
+   * WHICH row it would change, because a queue that shows a rationale and hides
+   * the value is asking for a signature on an unread document.
+   *
+   * Done by reassigning the global rather than by editing app.js, which is being
+   * changed on another branch right now. app.js calls `loadCanon()` on boot, after
+   * a promote, and on every proposal event, and all three resolve through the
+   * global at call time, so this takes over all of them without touching a line
+   * of it.
+   */
+  async function renderCanon() {
+    const box = q("#canon");
+    if (!box) return;
+    let proposals = [];
+    try {
+      ({ proposals } = await get("/proposals"));
+    } catch {
+      box.innerHTML = `<div class="faint tiny">Could not read the queue.</div>`;
+      return;
+    }
+    if (!proposals.length) {
+      box.innerHTML = `<div class="faint tiny">
+        Nothing pending. Run the Archivist on a scene from the Bible tab and what
+        it infers lands here for you to accept.</div>`;
+      return;
+    }
+    box.innerHTML = proposals.map((p) => `
+      <div class="ent is-draft" style="margin-bottom:9px">
+        <div class="meta" style="display:flex;gap:7px;align-items:center;margin-bottom:6px">
+          <span class="lay draft">draft</span>
+          <span class="tiny faint mono">${clean(p.source_agent)}</span>
+        </div>
+        <div style="font-size:13px;line-height:1.5;color:var(--ink)">${clean(p.preview || "")}</div>
+        <div class="tiny faint" style="margin:7px 0 2px">
+          would change <span class="mono">${clean(p.about || p.entity_type)}</span>
+          · field <span class="mono">${clean(p.field)}</span>
+        </div>
+        <div class="tiny muted" style="margin:6px 0 9px;line-height:1.5">
+          <span class="faint">why · </span>${clean(p.rationale)}
+        </div>
+        <div style="display:flex;gap:7px">
+          <button class="act primary p-ok" data-id="${clean(p.id)}"
+            style="padding:3px 9px;font-size:11px">promote to canon</button>
+          <button class="act p-no" data-id="${clean(p.id)}"
+            style="padding:3px 9px;font-size:11px">reject</button>
+        </div>
+      </div>`).join("");
+
+    qa("#canon .p-ok").forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      await fetch(`/api/proposals/${encodeURIComponent(b.dataset.id)}/promote`,
+                  { method: "POST" });
+      renderCanon();
+    });
+    qa("#canon .p-no").forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      await fetch(`/api/proposals/${encodeURIComponent(b.dataset.id)}/reject`,
+                  { method: "POST" });
+      renderCanon();
+    });
+  }
+
+  /* Run the Archivist over the selected scene. Streams through the shell's one
+   * SSE reader when it is there, so the Trace tab narrates it for free. */
+  async function proposeFromScene() {
+    const scene = +(q("#ciScene")?.value || 0);
+    const btn = q("#ciExtract");
+    if (!scene) return;
+    if (btn) { btn.disabled = true; btn.textContent = "reading the scene"; }
+    try {
+      if (typeof window.sse === "function") {
+        await window.sse("/bible/extract", { scene });
+      } else {
+        await fetch("/api/bible/extract", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scene }),
+        });
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Propose facts"; }
+      renderCanon();
+      qa("#itabs button").find((b) => b.dataset.i === "canon")?.click();
+    }
+  }
+
   /* ------------------------------------------------------------------- boot */
 
   async function boot() {
@@ -260,6 +348,13 @@
 
     const run = q("#ciRun");
     if (run) run.onclick = assemble;
+    const ex = q("#ciExtract");
+    if (ex) ex.onclick = proposeFromScene;
+
+    // Take over the canon strip. See renderCanon for why this is a reassignment
+    // and not an edit to app.js.
+    window.loadCanon = renderCanon;
+    renderCanon();
     let t;
     q("#ciQuery")?.addEventListener("input", () => {
       clearTimeout(t); t = setTimeout(assemble, 320);

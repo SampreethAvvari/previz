@@ -204,8 +204,67 @@ def update_scene(number: int, body: SceneBody, story_id: str | None = None):
 def proposals(story_id: str | None = None, status: str = "pending"):
     st = store.story(_sid(story_id))
     from dataclasses import asdict
-    return {"proposals": [asdict(p) for p in st.proposals.values()
-                          if status == "all" or p.status == status]}
+
+    out = []
+    for p in st.proposals.values():
+        if status != "all" and p.status != status:
+            continue
+        d = asdict(p)
+        # The strip has to show what it is asking you to accept, and what it would
+        # change. A queue that shows a rationale but not the value is asking for a
+        # signature on an unread document.
+        d["about"] = _about(st, p)
+        d["preview"] = _preview(p)
+        out.append(d)
+    return {"proposals": out}
+
+
+def _about(st, p) -> str:
+    """Which row this proposal would change, in words a person recognises."""
+    if p.entity_type == "character" and p.entity_id in st.characters:
+        return st.characters[p.entity_id].name
+    if p.entity_type == "scene" and p.entity_id in st.scenes:
+        sc = st.scenes[p.entity_id]
+        return f"scene {sc.number} · {sc.slugline}"
+    if p.entity_type == "location" and p.entity_id in st.locations:
+        return st.locations[p.entity_id].name
+    return p.entity_type
+
+
+def _preview(p) -> str:
+    """The proposed value as one readable line, whatever shape it is in."""
+    v = p.proposed
+    if isinstance(v, dict):
+        if "fact" in v:
+            since = v.get("since_scene")
+            return v["fact"] + (f"  (known from scene {since})" if since else "")
+        return ", ".join(f"{k}: {x}" for k, x in v.items())
+    if isinstance(v, list):
+        return "; ".join(str(x) for x in v)
+    return str(v)
+
+
+class ExtractIn(BaseModel):
+    scene: int
+
+
+@router.post("/bible/extract")
+def extract(body: ExtractIn, story_id: str | None = None):
+    """Read a scene and propose what it establishes. Streams.
+
+    This is the producer side of §5.1. Agents have no write path to canon, so the
+    Archivist proposes with its reasoning attached and the Canon strip fills in
+    front of you. Nothing it finds is true until a person promotes it.
+    """
+    from app.extract import extract_scene
+    from app.sse import stream
+
+    sid = _sid(story_id)
+
+    def work(emit):
+        return extract_scene(sid, body.scene, emit)
+
+    return stream(work, agent="Archivist")
 
 
 @router.post("/proposals/{pid}/promote")
@@ -220,13 +279,45 @@ def promote(pid: str, story_id: str | None = None):
     p = st.proposals.get(pid)
     if not p:
         raise HTTPException(404, "no such proposal")
-    if p.entity_type == "character" and p.entity_id in st.characters:
+    if p.entity_type == "character" and p.field == "knows" \
+            and p.entity_id in st.characters:
+        # A learned fact is a horizon edge, not an interview answer, so it is
+        # appended to `knows` with the scene it was learned in. That scene number
+        # is the whole value of promoting it: it is what stops the character
+        # referring to the fact in any earlier scene.
+        c = st.characters[p.entity_id]
+        v = p.proposed if isinstance(p.proposed, dict) else {"fact": str(p.proposed)}
+        fact = (v.get("fact") or "").strip()
+        if fact and not any(k.get("fact") == fact for k in c.knows):
+            c.knows.append({"fact": fact,
+                            "since_scene": int(v.get("since_scene", 1))})
+        # Deliberately no canon_version bump. The Identity and Voice Cards are
+        # compiled from the interview answers, and the horizon is injected per
+        # call, so staling both cards here would force a needless recompile: about
+        # thirty seconds of image quota to change nothing about the face.
+        reindex_entity(sid, "character", p.entity_id)
+        from app.graph import graph, reindex_edges
+        graph.sync_from_store(sid, force=True)
+        reindex_edges(sid)
+    elif p.entity_type == "character" and p.entity_id in st.characters:
         store.set_answers(sid, p.entity_id, {p.field: str(p.proposed)})
         reindex_entity(sid, "character", p.entity_id)
     elif p.entity_type == "scene" and p.entity_id:
         sc = st.scenes.get(p.entity_id)
         if sc and hasattr(sc, p.field):
-            setattr(sc, p.field, p.proposed)
+            current = getattr(sc, p.field)
+            # Append rather than assign for the prose fields. Promoting one
+            # extracted fact must not silently delete a synopsis somebody wrote:
+            # an accept button that destroys the thing it is adding to is a button
+            # nobody presses twice.
+            if p.field in ("synopsis", "body") and isinstance(current, str) \
+                    and current.strip():
+                addition = str(p.proposed).strip()
+                if addition and addition not in current:
+                    joiner = "\n\n" if p.field == "body" else " "
+                    setattr(sc, p.field, current.rstrip() + joiner + addition)
+            else:
+                setattr(sc, p.field, p.proposed)
             reindex_entity(sid, "scene", sc.id)
     p.status = "accepted"
     from dataclasses import asdict
