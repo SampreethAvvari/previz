@@ -49,7 +49,11 @@
     </button>
     <button class="tab" data-s="cast" style="--tint:var(--cast)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20.5c0-3.9 3.1-6.4 7-6.4s7 2.5 7 6.4"/></svg>
-      <span class="name">Cast · the 100 questions</span>
+      <span class="name">Cast · faces and voices</span>
+    </button>
+    <button class="tab" data-s="build" style="--tint:var(--build)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6.5h11M4 12h11M4 17.5h7"/><path d="M17.5 15.5l3 3-3 3" transform="translate(0,-5)"/></svg>
+      <span class="name">Builder · the 100 questions</span>
     </button>
     <button class="tab" data-s="scout" style="--tint:var(--scout)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21.5s7-6.3 7-11.4A7 7 0 005 10.1c0 5.1 7 11.4 7 11.4z"/><circle cx="12" cy="10" r="2.5"/></svg>
@@ -239,22 +243,16 @@
       <div class="grid frames" id="board"></div>
     </section>
 
-    <!-- Cast · the character builder --------------------------------------
-         The 100 questions live here. Everything below #castDetail is drawn by
-         builder.js, which owns the interview and nothing else. -->
+    <!-- Cast · the compiled cards ------------------------------------------
+         Faces and voices. The interview that feeds them is its own tab. -->
     <section class="surface" data-s="cast">
       <div class="grid" style="grid-template-columns:290px 1fr">
         <div>
           <div class="eyebrow">Characters</div>
           <div id="castList"></div>
           <div class="panel pad" style="margin-top:12px">
-            <label class="lab">Add a character</label>
-            <input class="f" id="newName" placeholder="name">
+            <input class="f" id="newName" placeholder="new character">
             <button class="act" id="btnAddChar" style="margin-top:8px;width:100%">Create</button>
-            <div class="tiny faint" style="margin-top:9px">
-              A new character starts with 100 unanswered questions. Answer the 12
-              core ones and they can speak.
-            </div>
           </div>
         </div>
         <div>
@@ -262,6 +260,13 @@
           <div id="castDetail"></div>
         </div>
       </div>
+    </section>
+
+    <!-- Builder · the 100 questions ----------------------------------------
+         One job: ask the questions. Drawn entirely by builder.js. -->
+    <section class="surface" data-s="build">
+      <div id="bdBar"></div>
+      <div id="bdMain"></div>
     </section>
 
     <!-- Scout ------------------------------------------------------------- -->

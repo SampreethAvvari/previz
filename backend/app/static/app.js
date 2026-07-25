@@ -416,17 +416,51 @@ function drawCastList() {
 // Deliberately does NOT re-pick. pick() calls this to move the highlight, so a
 // re-pick here recursed until the stack blew on the first character you clicked.
 
-/* The list is this file's. Everything to the right of it belongs to builder.js,
- * which owns the 100 question interview. Kept apart so a change to how the
- * interview asks is never a diff against the shell around it. */
+/* Faces and voices. The 100 questions that feed them are the Builder tab, which
+ * owns its own surface, so nothing here has an opinion about how they are asked. */
 async function pick(id) {
   PICKED = id;
   drawCastList();
   const ch = await api(`/characters/${id}`);
+  const p = ch.progress;
   $("#castWho").textContent = ch.name;
-  if (window.Builder) return Builder.open(ch);
-  $("#castDetail").innerHTML =
-    `<div class="empty">The character builder did not load. Reload the page.</div>`;
+  $("#castDetail").innerHTML = `
+    <div class="panel pad" style="margin-bottom:12px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="act primary" id="btnCompile">Compile cards</button>
+        <button class="act" id="btnCast">Cast · sheet and fingerprint</button>
+        <span class="chip ${p.ready_for_dialogue ? "ok" : "warn"}">${p.core_done} of 12 core</span>
+        <span class="chip">${p.answered} of 100</span>
+        ${p.ready_for_dialogue ? "" :
+          `<button class="act" id="toBuild">Answer questions</button>`}
+      </div>
+    </div>
+    ${ch.identity_card ? cardPanel("Identity Card · frozen, pasted verbatim into every image prompt", [
+      ["descriptor", ch.identity_card.descriptor],
+      ["wardrobe", ch.identity_card.wardrobe],
+      ["never", ch.identity_card.negative]], ch.sheet_url) : ""}
+    ${ch.voice_card ? cardPanel("Voice Card · frozen, injected verbatim into her sub-agent", [
+      ["how she speaks", ch.voice_card.card],
+      ["says", (ch.voice_card.phrases || []).join(" · ")],
+      ["never says", (ch.voice_card.never_says || []).join(" · ")],
+      ["samples", (ch.voice_card.samples || []).map((s) => `"${s}"`).join("\n")],
+      ...Object.entries(ch.voice_card.register || {})]) : ""}
+    ${ch.identity_card || ch.voice_card ? "" : `<div class="empty">${
+      p.ready_for_dialogue ? "No cards yet. Compile them from the answers."
+        : "No cards yet. Answer the 12 core questions first."}</div>`}`;
+
+  $("#toBuild")?.addEventListener("click",
+    () => $('.tab[data-s="build"]').click());
+  $("#btnCompile").onclick = () => castRun(id, "compile");
+  $("#btnCast").onclick = () => castRun(id, "cast");
+}
+
+async function castRun(id, what) {
+  const btn = what === "compile" ? $("#btnCompile") : $("#btnCast");
+  btn.disabled = true;
+  $$("#itabs button")[1].click();
+  await sse(`/characters/${id}/${what}`, {},
+    { run_end: async () => { await load(); pick(id); } });
 }
 
 function cardPanel(title, rows, sheet) {
