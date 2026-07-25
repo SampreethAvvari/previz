@@ -27,6 +27,29 @@ RUNTIME = BACKEND / ".cache"
 RUNTIME.mkdir(exist_ok=True)
 
 
+def publish_demo_cache() -> int:
+    """Mirror the committed frames into the runtime dir so ONE mount serves both.
+
+    Hardlink where the filesystem allows it, copy otherwise. Called at startup.
+    The alternative is two URL prefixes, one for committed frames and one for
+    generated ones, and then every consumer has to know which is which.
+    """
+    if not DEMO.is_dir():
+        return 0
+    n = 0
+    for src in DEMO.glob("*.png"):
+        dst = RUNTIME / src.name
+        if dst.exists():
+            continue
+        try:
+            import os
+            os.link(src, dst)
+        except OSError:
+            dst.write_bytes(src.read_bytes())
+        n += 1
+    return n
+
+
 def save_png(data: bytes, name: str) -> str:
     """Write bytes and return the URL the client should use."""
     safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_")
